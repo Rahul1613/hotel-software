@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-maroon: #641C24;
+    --color-burgundy: #852D34;
+    --color-ivory: #FFF9F0;
+    --color-gold: #C49A52;
+    --color-saffron: #D98B32;
+    --color-charcoal: #282321;
+    --color-softgrey: #F3F1ED;
+    --color-green: #258451;
+    --color-red: #C83E3E;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #FFF9F0;
+    color: #282321;
+    margin: 0;
+    padding: 0;
+  }
+
+  h1, h2, h3, .font-serif-royal {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+
+  .font-marathi {
+    font-family: 'Noto Sans Devanagari', sans-serif;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #FFF9F0;
+}
+::-webkit-scrollbar-thumb {
+  background: #C49A52;
+  border-radius: 9999px;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.02); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s infinite ease-in-out;
+}
