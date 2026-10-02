@@ -19,6 +19,7 @@ interface MenuProps {
   onBackToHome: () => void;
   onRequestService: (type: 'CALL_WAITER' | 'WATER_REQUEST' | 'BILL_REQUEST') => void;
   onRefreshMenu?: () => void;
+  onSelectTable?: (tbl: string) => void;
 }
 
 export const DigitalMenu: React.FC<MenuProps> = ({
@@ -32,7 +33,8 @@ export const DigitalMenu: React.FC<MenuProps> = ({
   onOpenCart,
   onBackToHome,
   onRequestService,
-  onRefreshMenu
+  onRefreshMenu,
+  onSelectTable
 }) => {
   const [lang, setLang] = useState<'en' | 'mr'>('en');
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
@@ -124,11 +126,23 @@ export const DigitalMenu: React.FC<MenuProps> = ({
               </button>
             </div>
 
-            {tableNumber && (
-              <span className="bg-[#641C24] text-[#FFF9F0] text-xs font-bold px-3 py-1.5 rounded-lg border border-[#C49A52]">
-                T-{tableNumber}
+            {tableNumber ? (
+              <span className="bg-[#641C24] text-[#FFF9F0] text-xs font-bold px-3 py-1.5 rounded-lg border border-[#C49A52] flex items-center gap-1 shadow-2xs">
+                <span>T-{tableNumber}</span>
               </span>
-            )}
+            ) : onSelectTable ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const input = window.prompt('Enter your Table Number (01 to 11):', '01');
+                  if (input && input.trim()) onSelectTable(input.trim());
+                }}
+                className="bg-amber-100 hover:bg-amber-200 text-[#641C24] border border-[#C49A52] text-xs font-bold px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors shadow-2xs"
+                title="Choose your table"
+              >
+                + Table
+              </button>
+            ) : null}
             <button 
               onClick={onOpenCart}
               className="relative p-2 rounded-xl bg-[#641C24] text-[#FFF9F0] hover:bg-[#852D34] transition-colors cursor-pointer shadow-sm"

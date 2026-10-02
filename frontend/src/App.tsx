@@ -15,8 +15,32 @@ export const App: React.FC = () => {
   // Navigation View State
   const [currentView, setCurrentView] = useState<'welcome' | 'menu' | 'tracking' | 'booking' | 'reviews' | 'staff' | 'kitchen' | 'admin'>('welcome');
   
-  // Table identifier extracted from URL query ?table=05
-  const [tableNumber, setTableNumber] = useState<string | null>(null);
+  // Table identifier extracted from URL query or persisted localStorage
+  const [tableNumber, setTableNumber] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tblParam = params.get('table') || params.get('tbl') || params.get('t');
+    if (tblParam) {
+      const formatted = tblParam.padStart(2, '0');
+      try { localStorage.setItem('ekdant_active_table', formatted); } catch {}
+      return formatted;
+    }
+    try {
+      return localStorage.getItem('ekdant_active_table') || null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleSelectTable = (tbl: string | null) => {
+    if (tbl) {
+      const formatted = tbl.padStart(2, '0');
+      setTableNumber(formatted);
+      try { localStorage.setItem('ekdant_active_table', formatted); } catch {}
+    } else {
+      setTableNumber(null);
+      try { localStorage.removeItem('ekdant_active_table'); } catch {}
+    }
+  };
 
   // App core state
   const [restaurant, setRestaurant] = useState<RestaurantInfo | null>(null);
@@ -51,10 +75,10 @@ export const App: React.FC = () => {
   // Detect table from URL param or direct route on load
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const tblParam = params.get('table');
+    const tblParam = params.get('table') || params.get('tbl') || params.get('t');
     if (tblParam) {
       const formatted = tblParam.padStart(2, '0');
-      setTableNumber(formatted);
+      handleSelectTable(formatted);
       setCurrentView('welcome');
     }
 
@@ -196,6 +220,7 @@ export const App: React.FC = () => {
           onCallWaiter={() => handleRequestService('CALL_WAITER')}
           onViewReviews={() => setCurrentView('reviews')}
           onOpenStaffLogin={() => setIsLoginModalOpen(true)}
+          onSelectTable={handleSelectTable}
         />
       )}
 
@@ -218,6 +243,7 @@ export const App: React.FC = () => {
           onBackToHome={() => setCurrentView('welcome')}
           onRequestService={handleRequestService}
           onRefreshMenu={fetchData}
+          onSelectTable={handleSelectTable}
         />
       )}
 
@@ -303,6 +329,7 @@ export const App: React.FC = () => {
           onRemoveItem={handleRemoveCartIndex}
           onCloseCart={() => setIsCartOpen(false)}
           onOrderSuccess={handleOrderSuccess}
+          onSelectTable={handleSelectTable}
         />
       )}
 

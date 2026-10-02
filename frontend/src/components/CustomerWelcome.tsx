@@ -14,6 +14,7 @@ interface WelcomeProps {
   onCallWaiter: () => void;
   onViewReviews?: () => void;
   onOpenStaffLogin?: () => void;
+  onSelectTable?: (tbl: string) => void;
 }
 
 export const CustomerWelcome: React.FC<WelcomeProps> = ({
@@ -23,7 +24,8 @@ export const CustomerWelcome: React.FC<WelcomeProps> = ({
   onBookTable,
   onCallWaiter,
   onViewReviews,
-  onOpenStaffLogin
+  onOpenStaffLogin,
+  onSelectTable
 }) => {
   const phone = restaurant?.phone || '+91 98234 56789';
   const whatsappNumber = (restaurant?.whatsapp || '919823456789').replace(/[^0-9]/g, '');
@@ -44,7 +46,7 @@ export const CustomerWelcome: React.FC<WelcomeProps> = ({
           <EkdantLogo size="lg" />
         </div>
 
-        {/* Detected Table Banner */}
+        {/* Detected Table Banner or Quick Table Selection */}
         {tableNumber ? (
           <div className="w-full bg-[#641C24]/10 border-2 border-[#C49A52] rounded-2xl p-4 mb-6 shadow-sm flex items-center justify-between">
             <div className="text-left">
@@ -56,17 +58,50 @@ export const CustomerWelcome: React.FC<WelcomeProps> = ({
               <span className="text-xs font-semibold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-300">
                 Active Dining Session
               </span>
+              {onSelectTable && (
+                <button
+                  onClick={() => onSelectTable('')}
+                  className="text-[11px] text-[#641C24] hover:text-[#852D34] underline font-bold ml-1 cursor-pointer"
+                >
+                  Change
+                </button>
+              )}
             </div>
           </div>
         ) : (
-          <div className="w-full bg-amber-50 border border-amber-300 rounded-2xl p-3 mb-6 text-sm text-amber-900 flex items-center justify-center gap-2">
-            <span>Table not detected automatically.</span>
-            <button 
-              onClick={onViewMenu}
-              className="text-[#641C24] font-bold underline cursor-pointer"
-            >
-              Browse digital menu
-            </button>
+          <div className="w-full bg-amber-50/90 border border-amber-300 rounded-2xl p-4 mb-6 text-left shadow-2xs">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-[#641C24] uppercase tracking-wider">
+                📍 Sitting at a Table? Tap your Table Number:
+              </span>
+              <span className="text-[10px] text-gray-500 font-medium">Or scan QR on table stand</span>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <span className="text-[10px] font-bold text-gray-500 uppercase shrink-0">AC Dining:</span>
+                {['01', '02', '03', '04', '05'].map(t => (
+                  <button
+                    key={t}
+                    onClick={() => onSelectTable && onSelectTable(t)}
+                    className="py-1 px-2.5 bg-white hover:bg-[#641C24] hover:text-white border border-[#C49A52]/40 rounded-lg text-xs font-bold text-[#641C24] transition-all cursor-pointer shadow-2xs"
+                  >
+                    T-{t}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <span className="text-[10px] font-bold text-gray-500 uppercase shrink-0">Non-AC:</span>
+                {['06', '07', '08', '09', '10', '11'].map(t => (
+                  <button
+                    key={t}
+                    onClick={() => onSelectTable && onSelectTable(t)}
+                    className="py-1 px-2.5 bg-white hover:bg-[#641C24] hover:text-white border border-[#C49A52]/40 rounded-lg text-xs font-bold text-[#641C24] transition-all cursor-pointer shadow-2xs"
+                  >
+                    T-{t}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

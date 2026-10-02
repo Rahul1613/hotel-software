@@ -14,6 +14,7 @@ interface CartProps {
   onRemoveItem: (index: number) => void;
   onCloseCart: () => void;
   onOrderSuccess: (orderData: any) => void;
+  onSelectTable?: (tbl: string) => void;
 }
 
 export const CartCheckoutModal: React.FC<CartProps> = ({
@@ -23,7 +24,8 @@ export const CartCheckoutModal: React.FC<CartProps> = ({
   onUpdateCartQty,
   onRemoveItem,
   onCloseCart,
-  onOrderSuccess
+  onOrderSuccess,
+  onSelectTable
 }) => {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -201,6 +203,74 @@ export const CartCheckoutModal: React.FC<CartProps> = ({
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Table Assignment Card */}
+              <div className="bg-amber-50/90 p-4 rounded-xl border border-amber-300 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-serif-royal font-bold text-[#641C24] text-sm flex items-center gap-1.5">
+                    {tableNumber ? (
+                      <>
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                        <span>Dining at Table {tableNumber}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-amber-700">📍 Select Your Table Number:</span>
+                      </>
+                    )}
+                  </span>
+                  {tableNumber && onSelectTable && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectTable('')}
+                      className="text-xs text-[#641C24] hover:text-[#852D34] underline font-bold cursor-pointer"
+                    >
+                      Change Table
+                    </button>
+                  )}
+                </div>
+
+                {!tableNumber && (
+                  <div className="space-y-2 pt-1">
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-600 uppercase">AC Dining Hall:</span>
+                      <div className="grid grid-cols-5 gap-1.5 mt-1">
+                        {['01', '02', '03', '04', '05'].map(t => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => {
+                              if (onSelectTable) onSelectTable(t);
+                              setErrorMsg('');
+                            }}
+                            className="py-1.5 px-1 bg-white hover:bg-[#641C24] hover:text-white border border-[#C49A52]/50 rounded-lg text-xs font-bold text-[#641C24] transition-all cursor-pointer shadow-2xs text-center"
+                          >
+                            T-{t}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-600 uppercase">Non-AC Family Hall:</span>
+                      <div className="grid grid-cols-6 gap-1.5 mt-1">
+                        {['06', '07', '08', '09', '10', '11'].map(t => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => {
+                              if (onSelectTable) onSelectTable(t);
+                              setErrorMsg('');
+                            }}
+                            className="py-1.5 px-1 bg-white hover:bg-[#641C24] hover:text-white border border-[#C49A52]/50 rounded-lg text-xs font-bold text-[#641C24] transition-all cursor-pointer shadow-2xs text-center"
+                          >
+                            T-{t}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Customer Details Form */}
