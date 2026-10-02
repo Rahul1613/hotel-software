@@ -488,7 +488,10 @@ def orders_api():
                 'subtotal': o.subtotal,
                 'cgst_amount': o.cgst_amount,
                 'sgst_amount': o.sgst_amount,
+                'discount_amount': o.discount_amount if hasattr(o, 'discount_amount') else 0.0,
                 'final_amount': o.final_amount,
+                'invoice_id': o.invoice.id if o.invoice else None,
+                'invoice_number': o.invoice.invoice_number if o.invoice else None,
                 'created_at': o.created_at.isoformat() if o.created_at else None,
                 'items': [{
                     'id': it.id,
@@ -700,6 +703,38 @@ def invoices_api():
             if not order:
                 return jsonify({'error': 'Order not found'}), 404
             table = order.table
+
+            # If order already has an invoice, update and return it without duplicating!
+            existing_inv = order.invoice or db.query(Invoice).filter(Invoice.order_id == order.id).first()
+            if existing_inv:
+                if 'payment_method' in data:
+                    existing_inv.payment_method = data['payment_method']
+                if 'payment_status' in data:
+                    existing_inv.payment_status = data['payment_status']
+                discount = float(data.get('discount_amount', 0))
+                if discount > 0:
+                    rest = db.query(Restaurant).first()
+                    taxable = max(0.0, existing_inv.subtotal - discount)
+                    cgst = round(taxable * (rest.cgst_rate / 100.0), 2)
+                    sgst = round(taxable * (rest.sgst_rate / 100.0), 2)
+                    raw_total = taxable + cgst + sgst
+                    rounded_total = round(raw_total)
+                    existing_inv.discount_amount = discount
+                    existing_inv.cgst_amount = cgst
+                    existing_inv.sgst_amount = sgst
+                    existing_inv.round_off = round(rounded_total - raw_total, 2)
+                    existing_inv.final_payable = rounded_total
+                order.status = 'COMPLETED'
+                order.payment_status = existing_inv.payment_status
+                if table:
+                    table.status = 'AVAILABLE'
+                db.commit()
+                return jsonify({
+                    'message': 'Existing invoice retrieved successfully',
+                    'invoice_id': existing_inv.id,
+                    'invoice_number': existing_inv.invoice_number,
+                    'final_payable': existing_inv.final_payable
+                }), 200
         elif table_number:
             table = db.query(RestaurantTable).filter(RestaurantTable.table_number == table_number).first()
             if not table:
@@ -1097,15 +1132,19 @@ def print_kot_html(order_id):
     items_html = "".join([
         f"<div class='item'><span><b>{it.quantity}×</b> {it.item_name} {'[VEG]' if it.is_veg else '[NON-VEG]'}</span>"
         f"<div class='custom'>{it.customization or ''}</div></div>"
-        for it in order.items
+        for it in (order.items or [])
     ])
+
+    tbl_num = order.table.table_number if order.table else 'N/A'
+    tbl_sec = order.table.section if order.table else 'Dining'
+    time_str = order.created_at.strftime('%d-%b-%Y %I:%M %p') if order.created_at else datetime.now().strftime('%d-%b-%Y %I:%M %p')
 
     html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
     <meta charset="utf-8">
-    <title>KOT - Table {order.table.table_number}</title>
+    <title>KOT - Table {tbl_num}</title>
     <style>
       @page {{ size: 80mm auto; margin: 0; }}
       body {{ font-family: monospace; width: 72mm; margin: 0 auto; padding: 10px 0; font-size: 14px; line-height: 1.3; color: #000; }}
@@ -1117,15 +1156,21 @@ def print_kot_html(order_id):
       .item {{ padding: 4px 0; border-bottom: 1px dotted #ccc; font-size: 14px; }}
       .custom {{ font-size: 11px; font-style: italic; margin-left: 15px; color: #333; }}
       .footer {{ border-top: 2px dashed #000; margin-top: 10px; padding-top: 4px; font-size: 11px; text-align: center; }}
+      .no-print {{ text-align: center; margin-bottom: 10px; }}
+      .print-btn {{ background: #641C24; color: #fff; border: none; padding: 7px 16px; border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer; }}
+      @media print {{ .no-print {{ display: none !important; }} }}
     </style>
     </head>
     <body onload="window.print()">
+      <div class="no-print">
+        <button onclick="window.print()" class="print-btn">🖨️ Print KOT Ticket</button>
+      </div>
       <div class="center title bold">KITCHEN ORDER TICKET (KOT)</div>
       <div class="center bold">HOTEL EKDANT</div>
-      <div class="table-box">TABLE {order.table.table_number} ({order.table.section})</div>
+      <div class="table-box">TABLE {tbl_num} ({tbl_sec})</div>
       <div class="info">
         <div><b>Order #:</b> {order.order_number}</div>
-        <div><b>Time:</b> {order.created_at.strftime('%d-%b-%Y %I:%M %p')}</div>
+        <div><b>Time:</b> {time_str}</div>
         <div><b>Guest:</b> {order.customer_name or 'Walk-in'}</div>
         <div><b>Instructions:</b> {order.special_instructions or 'Standard preparation'}</div>
       </div>
@@ -1133,7 +1178,7 @@ def print_kot_html(order_id):
         {items_html}
       </div>
       <div class="footer bold">
-        TOTAL ITEMS: {sum(it.quantity for it in order.items)}<br>
+        TOTAL ITEMS: {sum(it.quantity for it in (order.items or []))}<br>
         *** FOR KITCHEN USE ONLY ***
       </div>
     </body>
@@ -1164,6 +1209,10 @@ def print_thermal_receipt_html(invoice_id):
     else:
         items_rows = f"<tr><td colspan='3'>Food Dining</td><td style='text-align:right;'>{invoice.subtotal:.2f}</td></tr>"
 
+    tbl_num = invoice.table.table_number if invoice.table else (order.table.table_number if order and order.table else 'N/A')
+    date_str = invoice.created_at.strftime('%d-%m-%Y') if invoice.created_at else datetime.now().strftime('%d-%m-%Y')
+    time_str = invoice.created_at.strftime('%I:%M %p') if invoice.created_at else datetime.now().strftime('%I:%M %p')
+
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -1172,7 +1221,7 @@ def print_thermal_receipt_html(invoice_id):
     <title>Bill - {invoice.invoice_number}</title>
     <style>
       @page {{ size: 80mm auto; margin: 0; }}
-      body {{ font-family: 'Courier New', monospace; width: 72mm; margin: 0 auto; padding: 8px 0; font-size: 12px; line-height: 1.25; }}
+      body {{ font-family: 'Courier New', monospace; width: 72mm; margin: 0 auto; padding: 8px 0; font-size: 12px; line-height: 1.25; color: #000; }}
       .center {{ text-align: center; }}
       .bold {{ font-weight: bold; }}
       .header {{ border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 6px; }}
@@ -1183,25 +1232,31 @@ def print_thermal_receipt_html(invoice_id):
       .totals {{ border-top: 1px dashed #000; margin-top: 4px; padding-top: 4px; }}
       .grand-total {{ font-size: 15px; font-weight: bold; border-top: 2px dashed #000; border-bottom: 2px dashed #000; padding: 4px 0; margin: 6px 0; }}
       .footer {{ text-align: center; font-size: 10px; margin-top: 8px; }}
+      .no-print {{ text-align: center; margin-bottom: 8px; }}
+      .print-btn {{ background: #258451; color: #fff; border: none; padding: 7px 16px; border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer; }}
+      @media print {{ .no-print {{ display: none !important; }} }}
     </style>
     </head>
     <body onload="window.print()">
+      <div class="no-print">
+        <button onclick="window.print()" class="print-btn">🖨️ Print Bill / Receipt</button>
+      </div>
       <div class="header center">
-        <div class="logo-title">{rest.name}</div>
-        <div style="font-size: 10px;">{rest.tagline}</div>
-        <div style="font-size: 9px; margin-top: 2px;">{rest.address}</div>
-        <div style="font-size: 9px;">Phone: {rest.phone}</div>
-        <div style="font-size: 9px; font-weight: bold;">GSTIN: {rest.gstin} | FSSAI: {rest.fssai}</div>
+        <div class="logo-title">{rest.name if rest else 'HOTEL EKDANT'}</div>
+        <div style="font-size: 10px;">{rest.tagline if rest else 'Pure Maharashtrian Hospitality'}</div>
+        <div style="font-size: 9px; margin-top: 2px;">{rest.address if rest else ''}</div>
+        <div style="font-size: 9px;">Phone: {rest.phone if rest else ''}</div>
+        <div style="font-size: 9px; font-weight: bold;">GSTIN: {rest.gstin if rest else ''} | FSSAI: {rest.fssai if rest else ''}</div>
       </div>
 
       <div style="font-size: 10px;">
         <div style="display:flex; justify-content:space-between;">
           <span><b>Bill No:</b> {invoice.invoice_number}</span>
-          <span><b>TABLE:</b> {invoice.table.table_number}</span>
+          <span><b>TABLE:</b> {tbl_num}</span>
         </div>
         <div style="display:flex; justify-content:space-between;">
-          <span><b>Date:</b> {invoice.created_at.strftime('%d-%m-%Y')}</span>
-          <span><b>Time:</b> {invoice.created_at.strftime('%I:%M %p')}</span>
+          <span><b>Date:</b> {date_str}</span>
+          <span><b>Time:</b> {time_str}</span>
         </div>
         <div><b>Guest:</b> {invoice.customer_name or 'Walk-in'}</div>
         <div><b>Payment:</b> {invoice.payment_method} ({invoice.payment_status})</div>
@@ -1250,6 +1305,82 @@ def print_thermal_receipt_html(invoice_id):
     </html>
     """
     return html_content, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+@app.route('/api/orders/<int:order_id>/receipt/html', methods=['GET'])
+def print_order_receipt_html(order_id):
+    db = get_db()
+    order = db.query(Order).get(order_id)
+    if not order:
+        return jsonify({'error': 'Order not found'}), 404
+
+    invoice = order.invoice or db.query(Invoice).filter(Invoice.order_id == order.id).first()
+    if not invoice:
+        rest = db.query(Restaurant).first()
+        today_str = datetime.now().strftime('%Y%m%d')
+        inv_count = db.query(Invoice).filter(Invoice.invoice_number.like(f"INV-EKD-{today_str}-%")).count() + 1
+        invoice_number = f"INV-EKD-{today_str}-{str(inv_count).zfill(3)}"
+
+        invoice = Invoice(
+            invoice_number=invoice_number,
+            restaurant_id=rest.id if rest else 1,
+            order_id=order.id,
+            table_id=order.table_id,
+            customer_name=order.customer_name or 'Walk-in Guest',
+            customer_phone=order.customer_phone,
+            subtotal=order.subtotal,
+            cgst_rate=rest.cgst_rate if rest else 2.5,
+            cgst_amount=order.cgst_amount,
+            sgst_rate=rest.sgst_rate if rest else 2.5,
+            sgst_amount=order.sgst_amount,
+            discount_amount=getattr(order, 'discount_amount', 0.0) or 0.0,
+            round_off=0.0,
+            final_payable=order.final_amount,
+            payment_method=order.payment_method or 'CASH',
+            payment_status=order.payment_status or 'PAID'
+        )
+        db.add(invoice)
+        db.commit()
+        db.refresh(invoice)
+
+    return print_thermal_receipt_html(invoice.id)
+
+@app.route('/api/orders/<int:order_id>/invoice/pdf', methods=['GET'])
+def download_order_invoice_pdf(order_id):
+    db = get_db()
+    order = db.query(Order).get(order_id)
+    if not order:
+        return jsonify({'error': 'Order not found'}), 404
+
+    invoice = order.invoice or db.query(Invoice).filter(Invoice.order_id == order.id).first()
+    if not invoice:
+        rest = db.query(Restaurant).first()
+        today_str = datetime.now().strftime('%Y%m%d')
+        inv_count = db.query(Invoice).filter(Invoice.invoice_number.like(f"INV-EKD-{today_str}-%")).count() + 1
+        invoice_number = f"INV-EKD-{today_str}-{str(inv_count).zfill(3)}"
+
+        invoice = Invoice(
+            invoice_number=invoice_number,
+            restaurant_id=rest.id if rest else 1,
+            order_id=order.id,
+            table_id=order.table_id,
+            customer_name=order.customer_name or 'Walk-in Guest',
+            customer_phone=order.customer_phone,
+            subtotal=order.subtotal,
+            cgst_rate=rest.cgst_rate if rest else 2.5,
+            cgst_amount=order.cgst_amount,
+            sgst_rate=rest.sgst_rate if rest else 2.5,
+            sgst_amount=order.sgst_amount,
+            discount_amount=getattr(order, 'discount_amount', 0.0) or 0.0,
+            round_off=0.0,
+            final_payable=order.final_amount,
+            payment_method=order.payment_method or 'CASH',
+            payment_status=order.payment_status or 'PAID'
+        )
+        db.add(invoice)
+        db.commit()
+        db.refresh(invoice)
+
+    return download_invoice_pdf(invoice.id)
 
 # --- SERVE FRONTEND STATIC BUILD ---
 FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'dist'))

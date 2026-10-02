@@ -29,11 +29,43 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
   const [soundActive, setSoundActive] = useState<boolean>(true);
   const [lastOrderCount, setLastOrderCount] = useState<number>(0);
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<Order | null>(null);
+  const [printingKotOrder, setPrintingKotOrder] = useState<Order | null>(null);
+  const [reprintOrder, setReprintOrder] = useState<Order | null>(null);
 
   // Bill Generation modal state
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
   const [isGeneratingBill, setIsGeneratingBill] = useState<boolean>(false);
+
+  // Hidden iframe printer helper to guarantee printing across all browsers without popup blockage
+  const printUrlViaIframe = (url: string) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (err) {
+          console.error('Direct print failed, opening in new tab:', err);
+          window.open(url, '_blank');
+        }
+        setTimeout(() => {
+          try {
+            document.body.removeChild(iframe);
+          } catch {}
+        }, 3000);
+      }, 300);
+    };
+    iframe.src = url;
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -382,8 +414,12 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                         {order.status !== 'CANCELLED' && (
                           <div className="col-span-2 flex justify-end pb-1">
                             <button
-                              onClick={() => window.open(`/api/orders/${order.id}/kot/html`, '_blank')}
-                              className="text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 px-2 py-1 rounded flex items-center gap-1 cursor-pointer"
+                              onClick={() => {
+                                setPrintingKotOrder(order);
+                                printUrlViaIframe(`/api/orders/${order.id}/kot/html`);
+                              }}
+                              className="text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 px-2 py-1 rounded flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                              title="Print Kitchen Order Ticket"
                             >
                               <Printer className="w-3.5 h-3.5 text-[#641C24]" />
                               <span>Print KOT Ticket</span>
@@ -432,13 +468,18 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                         )}
 
                         {order.status === 'COMPLETED' && (
-                          <div className="col-span-2 flex items-center justify-between text-xs text-gray-500">
-                            <span className="text-emerald-700 font-bold">Paid & Closed</span>
+                          <div className="col-span-2 flex items-center justify-between text-xs text-gray-500 pt-1">
+                            <span className="text-emerald-700 font-bold flex items-center gap-1">
+                              <CheckCheck className="w-3.5 h-3.5" />
+                              <span>Paid & Closed</span>
+                            </span>
                             <button
-                              onClick={() => setSelectedInvoiceOrder(order)}
-                              className="text-[#641C24] underline font-semibold cursor-pointer"
+                              onClick={() => setReprintOrder(order)}
+                              className="text-[#641C24] hover:text-[#852D34] bg-amber-50 hover:bg-amber-100 border border-[#C49A52]/40 px-2.5 py-1 rounded font-bold cursor-pointer flex items-center gap-1 shadow-2xs transition-colors"
+                              title="Reprint Bill or Download Tax Invoice"
                             >
-                              Reprint Bill
+                              <Printer className="w-3.5 h-3.5 text-[#641C24]" />
+                              <span>Reprint Bill</span>
                             </button>
                           </div>
                         )}
@@ -688,7 +729,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                     });
                     const data = await res.json();
                     if (res.ok) {
-                      window.open(`/api/invoices/${data.invoice_id}/receipt/html`, '_blank');
+                      printUrlViaIframe(`/api/invoices/${data.invoice_id}/receipt/html`);
                       setSelectedInvoiceOrder(null);
                       fetchDashboardData();
                     }
@@ -703,6 +744,188 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
               >
                 <Printer className="w-4 h-4 text-emerald-200" />
                 <span>1-Click 80mm Thermal Bill</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REPRINT BILL MODAL (PAID & CLOSED ORDERS) */}
+      {reprintOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#C49A52]/40 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+              <div>
+                <h3 className="font-serif-royal font-bold text-lg text-[#641C24]">
+                  Reprint Bill: Table {reprintOrder.table_number}
+                </h3>
+                <p className="text-[11px] text-gray-500 font-mono">
+                  Order #{reprintOrder.order_number} {reprintOrder.invoice_number ? `• ${reprintOrder.invoice_number}` : ''}
+                </p>
+              </div>
+              <button 
+                onClick={() => setReprintOrder(null)}
+                className="text-gray-400 hover:text-black font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-emerald-800 uppercase block">Settlement Status</span>
+                <span className="text-xs text-emerald-700">Payment: {reprintOrder.payment_method} ({reprintOrder.payment_status})</span>
+              </div>
+              <span className="text-xs font-bold bg-emerald-600 text-white px-2.5 py-1 rounded-full flex items-center gap-1">
+                <CheckCheck className="w-3.5 h-3.5" />
+                <span>Paid & Closed</span>
+              </span>
+            </div>
+
+            {/* Bill Summary */}
+            <div className="bg-[#FFF9F0] p-3.5 rounded-xl border border-[#C49A52]/30 space-y-1.5 text-xs">
+              <div className="space-y-1 max-h-36 overflow-y-auto pr-1 border-b border-gray-200 pb-2">
+                {reprintOrder.items?.map(it => (
+                  <div key={it.id} className="flex justify-between text-gray-700">
+                    <span>{it.quantity}× {it.item_name}</span>
+                    <span className="font-medium">₹{it.total_price.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between pt-1">
+                <span>Items Subtotal:</span>
+                <span className="font-semibold">₹{reprintOrder.subtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>CGST (2.5%):</span>
+                <span>₹{reprintOrder.cgst_amount.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>SGST (2.5%):</span>
+                <span>₹{reprintOrder.sgst_amount.toFixed(2)}</span>
+              </div>
+              {reprintOrder.discount_amount && reprintOrder.discount_amount > 0 ? (
+                <div className="flex justify-between text-emerald-700 font-semibold">
+                  <span>Discount:</span>
+                  <span>- ₹{reprintOrder.discount_amount.toFixed(2)}</span>
+                </div>
+              ) : null}
+              <div className="flex justify-between font-bold text-base pt-1.5 border-t border-[#C49A52]/40 text-[#641C24]">
+                <span>Total Paid:</span>
+                <span>₹{reprintOrder.final_amount.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={() => {
+                  printUrlViaIframe(`/api/orders/${reprintOrder.id}/receipt/html`);
+                }}
+                className="w-full bg-[#258451] hover:bg-emerald-800 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+              >
+                <Printer className="w-4 h-4 text-emerald-200" />
+                <span>Print 80mm Thermal Bill</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  window.open(`/api/orders/${reprintOrder.id}/invoice/pdf?format=A4`, '_blank');
+                }}
+                className="w-full bg-[#641C24] hover:bg-[#852D34] text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+              >
+                <Printer className="w-4 h-4 text-[#C49A52]" />
+                <span>A4 Tax Invoice (PDF)</span>
+              </button>
+            </div>
+            <div className="flex justify-center">
+              <a
+                href={`/api/orders/${reprintOrder.id}/receipt/html`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-gray-500 hover:text-gray-800 underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>↗ Open in new browser tab</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KOT PREVIEW MODAL */}
+      {printingKotOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-[#C49A52]/40 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+              <div>
+                <h3 className="font-serif-royal font-bold text-lg text-[#641C24]">
+                  KOT: Table {printingKotOrder.table_number}
+                </h3>
+                <p className="text-[11px] text-gray-500 font-mono">
+                  {printingKotOrder.order_number} • {printingKotOrder.section}
+                </p>
+              </div>
+              <button 
+                onClick={() => setPrintingKotOrder(null)}
+                className="text-gray-400 hover:text-black font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-amber-50/70 border border-amber-300 rounded-xl p-3.5 font-mono text-xs space-y-2 text-gray-900">
+              <div className="text-center font-bold text-sm border-b border-dashed border-gray-400 pb-1 text-[#641C24]">
+                KITCHEN ORDER TICKET (KOT)
+              </div>
+              <div className="text-[11px] text-gray-600 flex justify-between">
+                <span>Guest: {printingKotOrder.customer_name || 'Walk-in'}</span>
+                <span>{new Date(printingKotOrder.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              {printingKotOrder.special_instructions && (
+                <div className="bg-amber-100 p-1.5 rounded text-[11px] font-sans text-amber-900 border border-amber-300">
+                  <strong>Note:</strong> {printingKotOrder.special_instructions}
+                </div>
+              )}
+              <div className="border-t border-dashed border-gray-400 pt-2 space-y-1.5 max-h-48 overflow-y-auto">
+                {printingKotOrder.items?.map(it => (
+                  <div key={it.id} className="flex items-start justify-between">
+                    <div>
+                      <span className="font-bold text-sm">{it.quantity}×</span>{' '}
+                      <span className="font-bold">{it.item_name}</span>
+                      {it.customization && (
+                        <div className="text-[10px] text-gray-600 italic ml-4">
+                          ↳ {it.customization}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] uppercase font-bold text-gray-500 ml-1">
+                      {it.is_veg ? '[VEG]' : '[NON-VEG]'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-dashed border-gray-400 pt-1.5 text-center font-bold text-xs">
+                Total Items: {printingKotOrder.items?.reduce((sum, it) => sum + it.quantity, 0) || 0}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={() => {
+                  printUrlViaIframe(`/api/orders/${printingKotOrder.id}/kot/html`);
+                }}
+                className="w-full bg-[#641C24] hover:bg-[#852D34] text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer shadow-md"
+              >
+                <Printer className="w-3.5 h-3.5 text-[#C49A52]" />
+                <span>Print Ticket</span>
+              </button>
+              <button
+                onClick={() => {
+                  window.open(`/api/orders/${printingKotOrder.id}/kot/html`, '_blank');
+                }}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer border border-gray-300"
+              >
+                <span>Open in Tab</span>
               </button>
             </div>
           </div>

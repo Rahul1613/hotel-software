@@ -84,7 +84,10 @@ export interface Order {
   subtotal: number;
   cgst_amount: number;
   sgst_amount: number;
+  discount_amount?: number;
   final_amount: number;
+  invoice_id?: number;
+  invoice_number?: string;
   created_at: string;
   items: OrderItem[];
 }

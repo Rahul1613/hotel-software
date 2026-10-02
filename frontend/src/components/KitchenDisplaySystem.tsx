@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChefHat, Clock, CheckCircle2, Flame, ArrowLeft, RefreshCw, Volume2, VolumeX } from 'lucide-react';
+import { ChefHat, Clock, CheckCircle2, Flame, ArrowLeft, RefreshCw, Volume2, VolumeX, Printer } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 import type { Order } from '../types';
 
@@ -11,6 +11,32 @@ export const KitchenDisplaySystem: React.FC<KDSProps> = ({ onBack }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [stationFilter, setStationFilter] = useState<'ALL' | 'FOOD' | 'BEVERAGE'>('ALL');
   const [soundEnabled, setSoundEnabled] = useState(true);
+
+  const printUrlViaIframe = (url: string) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch {
+          window.open(url, '_blank');
+        }
+        setTimeout(() => {
+          try { document.body.removeChild(iframe); } catch {}
+        }, 3000);
+      }, 300);
+    };
+    iframe.src = url;
+  };
 
   const fetchKitchenOrders = async () => {
     try {
@@ -136,13 +162,23 @@ export const KitchenDisplaySystem: React.FC<KDSProps> = ({ onBack }) => {
                       </span>
                     </div>
 
-                    <div className="text-right">
-                      <span className={`text-xs font-black px-2.5 py-1 rounded-full uppercase ${
-                        isCooking ? 'bg-amber-400 text-black' : 'bg-red-500 text-white animate-bounce'
-                      }`}>
-                        {order.status}
-                      </span>
-                      <p className="text-[11px] text-gray-300 mt-1 flex items-center gap-1 justify-end">
+                    <div className="text-right flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => printUrlViaIframe(`/api/orders/${order.id}/kot/html`)}
+                          className="bg-white/10 hover:bg-white/20 active:scale-95 text-white text-[10px] font-bold px-2 py-0.5 rounded border border-white/20 flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Print Kitchen Order Ticket"
+                        >
+                          <Printer className="w-3 h-3 text-amber-300" />
+                          <span>Print</span>
+                        </button>
+                        <span className={`text-xs font-black px-2 py-0.5 rounded-full uppercase ${
+                          isCooking ? 'bg-amber-400 text-black' : 'bg-red-500 text-white animate-bounce'
+                        }`}>
+                          {order.status}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-300 flex items-center gap-1 justify-end">
                         <Clock className="w-3 h-3" /> {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
