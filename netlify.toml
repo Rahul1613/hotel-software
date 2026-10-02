@@ -1,0 +1,15 @@
+# Netlify Configuration for Hotel Ekdant
+
+[build]
+  base = "frontend"
+  publish = "dist"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA fallback rule - prevents 404 on page refresh (/staff, /kitchen, /admin, etc.)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
