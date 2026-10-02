@@ -13,7 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 from app.models import SessionLocal, RestaurantTable, Restaurant
 
-DEFAULT_BASE_URL = os.environ.get("APP_BASE_URL", "https://hotel-software.onrender.com")
+DEFAULT_BASE_URL = os.environ.get("APP_BASE_URL", "https://hotel-ekdant-restaurant.onrender.com")
 
 def generate_qr_base64(table_number: str, base_url: str = "") -> str:
     """Generates a high-contrast QR code image as base64 string with full HTTPS URL."""
