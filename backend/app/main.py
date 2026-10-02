@@ -1274,4 +1274,4 @@ def serve_frontend_app(path):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
     print(f"Hotel Ekdant Restaurant Management Backend running on port {port}...")
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
