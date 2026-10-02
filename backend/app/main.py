@@ -19,8 +19,19 @@ app.config['SECRET_KEY'] = 'ekdant_secret_hospitality_key_2026'
 CORS(app, resources={r"/*": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-# Ensure DB is created
+# Ensure DB is created and seeded
 init_db()
+try:
+    from app.seed import seed_database
+    from app.add_dishes import add_expanded_menu
+    _check_db = SessionLocal()
+    if _check_db.query(MenuItem).count() < 10:
+        print("Auto-seeding fresh database for Hotel Ekdant...")
+        seed_database()
+        add_expanded_menu()
+    _check_db.close()
+except Exception as _e:
+    print("Auto-seed check notice:", _e)
 
 def get_db():
     return SessionLocal()
