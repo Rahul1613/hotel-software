@@ -31,9 +31,10 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 WORKDIR /app/backend
 
-# Seed database on start if fresh
+# Environment
 ENV PORT=5001
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/backend
 
 EXPOSE 5001
 

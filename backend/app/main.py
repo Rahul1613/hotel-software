@@ -1,4 +1,7 @@
+import sys
 import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from datetime import datetime, date, timedelta
 from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
