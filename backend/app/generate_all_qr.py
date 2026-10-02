@@ -13,9 +13,12 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 from app.models import SessionLocal, RestaurantTable, Restaurant
 
+DEFAULT_BASE_URL = os.environ.get("APP_BASE_URL", "https://hotel-software.onrender.com")
+
 def generate_qr_base64(table_number: str, base_url: str = "") -> str:
-    """Generates a high-contrast QR code image as base64 string."""
-    qr_url = f"{base_url}/menu?table={table_number}" if base_url else f"/menu?table={table_number}"
+    """Generates a high-contrast QR code image as base64 string with full HTTPS URL."""
+    active_base = (base_url or DEFAULT_BASE_URL).rstrip('/')
+    qr_url = f"{active_base}/?table={table_number}"
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_H,
@@ -31,6 +34,7 @@ def generate_qr_base64(table_number: str, base_url: str = "") -> str:
 
 def generate_html_stands(tables, restaurant, base_url: str = "") -> str:
     """Generates a complete self-contained printable HTML page for all 11 tables."""
+    active_base = (base_url or DEFAULT_BASE_URL).rstrip('/')
     cards_html = ""
     
     logo_path = os.path.join(os.path.dirname(__file__), "static", "ekdant_logo.png")
@@ -41,7 +45,8 @@ def generate_html_stands(tables, restaurant, base_url: str = "") -> str:
 
     # We pair tables 2 per page
     for i, t in enumerate(tables):
-        qr_b64 = generate_qr_base64(t.table_number, base_url)
+        qr_b64 = generate_qr_base64(t.table_number, active_base)
+        target_link = f"{active_base}/?table={t.table_number}"
         section_label = "AC DINING HALL" if t.section == "AC" else "NON-AC FAMILY HALL"
         section_color = "#258451" if t.section == "AC" else "#852D34"
         section_bg = "#E8F5E9" if t.section == "AC" else "#FFEBEE"
@@ -67,6 +72,9 @@ def generate_html_stands(tables, restaurant, base_url: str = "") -> str:
               <img src="data:image/png;base64,{qr_b64}" alt="QR Table {t.table_number}" class="qr-img" />
               <div class="scan-pill">
                 <span>📱 Scan with Camera / Google Lens</span>
+              </div>
+              <div class="target-url-text">
+                {target_link}
               </div>
             </div>
 
@@ -134,6 +142,7 @@ def generate_html_stands(tables, restaurant, base_url: str = "") -> str:
     .controls-desc {{
       font-size: 11px;
       color: #666;
+      margin-top: 2px;
     }}
 
     .btn-print {{
@@ -168,7 +177,7 @@ def generate_html_stands(tables, restaurant, base_url: str = "") -> str:
 
     .qr-card {{
       width: 420px;
-      height: 590px;
+      height: 605px;
       background: #FFFDF7;
       border: 3px solid #641C24;
       border-radius: 20px;
@@ -282,7 +291,16 @@ def generate_html_stands(tables, restaurant, base_url: str = "") -> str:
       font-weight: 700;
       padding: 4px 12px;
       border-radius: 8px;
-      margin-top: 8px;
+      margin-top: 6px;
+    }}
+
+    .target-url-text {{
+      font-family: monospace;
+      font-size: 9px;
+      color: #641C24;
+      margin-top: 4px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
     }}
 
     .instructions {{
@@ -351,7 +369,7 @@ def generate_html_stands(tables, restaurant, base_url: str = "") -> str:
   <div class="top-controls no-print">
     <div>
       <div class="controls-title">HOTEL EKDANT — ALL 11 TABLE QR STANDS</div>
-      <div class="controls-desc">Ready to print on A4 cardstock / paper. Each sheet fits 2 standard acrylic table stands (Tables 01 to 11).</div>
+      <div class="controls-desc">Ready to print on A4 cardstock / paper. Each sheet fits 2 acrylic table stands (Tables 01 to 11). Encoded URL: <b>{active_base}</b></div>
     </div>
     <div style="display: flex; gap: 10px; align-items: center;">
       <button onclick="window.print()" class="btn-print">
@@ -370,6 +388,7 @@ def generate_html_stands(tables, restaurant, base_url: str = "") -> str:
 
 def generate_pdf_stands(tables, restaurant, output_pdf_path: str, base_url: str = ""):
     """Generates an A4 PDF document containing all 11 table stands (2 per page)."""
+    active_base = (base_url or DEFAULT_BASE_URL).rstrip('/')
     doc = SimpleDocTemplate(
         output_pdf_path,
         pagesize=A4,
@@ -422,6 +441,16 @@ def generate_pdf_stands(tables, restaurant, output_pdf_path: str, base_url: str 
         spaceAfter=4
     )
     
+    url_style = ParagraphStyle(
+        'CardUrl',
+        parent=styles['Normal'],
+        fontName='Courier',
+        fontSize=7,
+        textColor=colors.HexColor('#641C24'),
+        alignment=1,
+        spaceAfter=3
+    )
+
     footer_style = ParagraphStyle(
         'CardFooter',
         parent=styles['Normal'],
@@ -445,20 +474,21 @@ def generate_pdf_stands(tables, restaurant, output_pdf_path: str, base_url: str 
             
             card_flowables.append(Paragraph("HOTEL EKDANT", title_style))
             card_flowables.append(Paragraph("FAMILY RESTAURANT & DINING", sub_style))
-            card_flowables.append(Spacer(1, 4))
+            card_flowables.append(Spacer(1, 3))
             
             card_flowables.append(Paragraph(f"TABLE {t.table_number}", tbl_style))
             sec_txt = f"{'AC DINING HALL' if t.section == 'AC' else 'NON-AC FAMILY HALL'} (Seats {t.capacity})"
             card_flowables.append(Paragraph(sec_txt, tag_style))
-            card_flowables.append(Spacer(1, 4))
+            card_flowables.append(Spacer(1, 3))
             
             # QR code image
-            qr_bytes = io.BytesIO(base64.b64decode(generate_qr_base64(t.table_number, base_url)))
-            card_flowables.append(RLImage(qr_bytes, width=150, height=150))
-            card_flowables.append(Spacer(1, 4))
+            qr_bytes = io.BytesIO(base64.b64decode(generate_qr_base64(t.table_number, active_base)))
+            card_flowables.append(RLImage(qr_bytes, width=145, height=145))
+            card_flowables.append(Paragraph(f"{active_base}/?table={t.table_number}", url_style))
+            card_flowables.append(Spacer(1, 2))
             
             card_flowables.append(Paragraph("<b>Scan with Mobile Camera / Google Lens</b><br/>Browse Digital Menu & Place Order", sub_style))
-            card_flowables.append(Spacer(1, 6))
+            card_flowables.append(Spacer(1, 4))
             card_flowables.append(Paragraph("Near Shree Ganesh Mandir, Kolhapur Road • Ph: +91 98234 56789<br/>Pure Maharashtrian & Family Hospitality", footer_style))
             
             t_cell = Table([[item] for item in card_flowables], colWidths=[260])
@@ -467,8 +497,8 @@ def generate_pdf_stands(tables, restaurant, output_pdf_path: str, base_url: str 
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('BOX', (0,0), (-1,-1), 1.5, colors.HexColor('#641C24')),
                 ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#FFFDF7')),
-                ('TOPPADDING', (0,0), (-1,-1), 8),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+                ('TOPPADDING', (0,0), (-1,-1), 6),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 6),
             ]))
             pair_cells.append(t_cell)
             
@@ -489,7 +519,8 @@ def generate_pdf_stands(tables, restaurant, output_pdf_path: str, base_url: str 
             
     doc.build(story)
 
-def generate_all():
+def generate_all(base_url: str = ""):
+    active_base = (base_url or DEFAULT_BASE_URL).rstrip('/')
     db = SessionLocal()
     tables = db.query(RestaurantTable).order_by(RestaurantTable.table_number).all()
     restaurant = db.query(Restaurant).first()
@@ -499,25 +530,27 @@ def generate_all():
     
     # 1. Output HTML in root directory
     html_path = os.path.join(root_dir, "table_qr_stands_print.html")
-    html_content = generate_html_stands(tables, restaurant)
+    html_content = generate_html_stands(tables, restaurant, active_base)
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html_content)
-    print(f"Generated printable HTML: {html_path}")
+    print(f"Generated printable HTML with domain [{active_base}]: {html_path}")
     
     # 2. Output PDF in root directory
     pdf_path = os.path.join(root_dir, "Hotel_Ekdant_Table_QR_Stands.pdf")
-    generate_pdf_stands(tables, restaurant, pdf_path)
-    print(f"Generated printable PDF: {pdf_path}")
+    generate_pdf_stands(tables, restaurant, pdf_path, active_base)
+    print(f"Generated printable PDF with domain [{active_base}]: {pdf_path}")
     
-    # 3. Also output individual high-resolution PNGs in table_qr_codes/
+    # 3. Output individual high-resolution PNGs in table_qr_codes/
     qr_dir = os.path.join(root_dir, "table_qr_codes")
     os.makedirs(qr_dir, exist_ok=True)
     for t in tables:
-        qr_bytes = base64.b64decode(generate_qr_base64(t.table_number))
+        qr_bytes = base64.b64decode(generate_qr_base64(t.table_number, active_base))
         png_file = os.path.join(qr_dir, f"Table_{t.table_number}_{t.section}.png")
         with open(png_file, "wb") as f:
             f.write(qr_bytes)
     print(f"Generated 11 individual table PNGs in: {qr_dir}")
 
 if __name__ == "__main__":
-    generate_all()
+    import sys
+    custom_url = sys.argv[1] if len(sys.argv) > 1 else ""
+    generate_all(custom_url)

@@ -96,6 +96,8 @@ export const App: React.FC = () => {
       if (!savedUser) setIsLoginModalOpen(true);
     } else if (path.includes('login')) {
       setIsLoginModalOpen(true);
+    } else if (path.includes('menu')) {
+      setCurrentView('menu');
     }
   }, []);
 
