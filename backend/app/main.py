@@ -312,8 +312,30 @@ def get_table_qr(table_number):
         return jsonify({'error': 'Table not found'}), 404
         
     base_url = request.host_url.rstrip('/')
-    png_bytes = generate_table_qr_image(table.table_number, table.qr_code_token, base_url="http://localhost:3000")
+    png_bytes = generate_table_qr_image(table.table_number, table.qr_code_token, base_url=base_url)
     return Response(png_bytes, mimetype='image/png')
+
+@app.route('/api/tables/qr/print-all', methods=['GET'])
+def print_all_tables_qr():
+    from app.generate_all_qr import generate_html_stands
+    db = get_db()
+    tables = db.query(RestaurantTable).order_by(RestaurantTable.table_number).all()
+    restaurant = db.query(Restaurant).first()
+    base_url = request.host_url.rstrip('/')
+    html_content = generate_html_stands(tables, restaurant, base_url=base_url)
+    return Response(html_content, mimetype='text/html; charset=utf-8')
+
+@app.route('/api/tables/qr/pdf', methods=['GET'])
+def download_all_tables_qr_pdf():
+    from app.generate_all_qr import generate_pdf_stands
+    pdf_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'Hotel_Ekdant_Table_QR_Stands.pdf'))
+    if not os.path.exists(pdf_path):
+        db = get_db()
+        tables = db.query(RestaurantTable).order_by(RestaurantTable.table_number).all()
+        restaurant = db.query(Restaurant).first()
+        base_url = request.host_url.rstrip('/')
+        generate_pdf_stands(tables, restaurant, pdf_path, base_url=base_url)
+    return send_file(pdf_path, mimetype='application/pdf', as_attachment=False, download_name='Hotel_Ekdant_Table_QR_Stands.pdf')
 
 # --- MENU API ---
 @app.route('/api/categories', methods=['GET', 'POST'])

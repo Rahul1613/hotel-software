@@ -494,7 +494,38 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
 
         {/* 11 TABLES VIEW */}
         {activeTab === 'tables' && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-2xl border border-[#C49A52]/40 shadow-sm flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-serif-royal font-bold text-base text-[#641C24]">
+                  Table Management & QR Stands (11 Tables)
+                </h3>
+                <p className="text-xs text-gray-600">
+                  Tables 01–05: AC Dining Hall • Tables 06–11: Non-AC Family Hall
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href="/api/tables/qr/print-all"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="bg-[#641C24] hover:bg-[#852D34] text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                >
+                  <Printer className="w-4 h-4 text-[#C49A52]" />
+                  <span>🖨️ Print All Table QR Stands</span>
+                </a>
+                <a
+                  href="/api/tables/qr/pdf"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                >
+                  <span>📄 Download PDF</span>
+                </a>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {tables.map(tbl => {
               const statusColors = {
                 AVAILABLE: 'border-emerald-300 bg-emerald-50/50 text-emerald-900',
@@ -595,6 +626,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                 </div>
               );
             })}
+            </div>
           </div>
         )}
 
