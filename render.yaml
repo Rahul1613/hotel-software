@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: hotel-ekdant-restaurant
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    envVars:
+      - key: PORT
+        value: 10000
