@@ -3,10 +3,17 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ChefHat, ArrowRight, Utensils, CheckCircle } from 'lucide-react';
 import { formatINR } from '../../utils/money';
 import { apiRequest } from '../../api';
+import type { Language } from '../../utils/i18n';
 
-export const ActiveDiningBar: React.FC = () => {
+interface ActiveDiningBarProps {
+  language?: Language;
+}
+
+export const ActiveDiningBar: React.FC<ActiveDiningBarProps> = ({ language }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const currentLang: Language = language || (localStorage.getItem('ekdant_language') as Language) || 'en';
+  const isMr = currentLang === 'mr';
 
   const [activeSession, setActiveSession] = useState<{
     latest_order_id: number;
@@ -72,12 +79,12 @@ export const ActiveDiningBar: React.FC = () => {
 
   const statusLabel =
     activeSession.latest_order_status === 'PREPARING'
-      ? 'Cooking in Kitchen'
+      ? (isMr ? 'स्वयंपाकघरात तयार होत आहे' : 'Cooking in Kitchen')
       : activeSession.latest_order_status === 'READY'
-      ? 'Ready to Serve'
+      ? (isMr ? 'वाढण्यासाठी तयार' : 'Ready to Serve')
       : activeSession.latest_order_status === 'SERVED'
-      ? 'Served at Table'
-      : 'Order Received';
+      ? (isMr ? 'टेबलवर दिले' : 'Served at Table')
+      : (isMr ? 'ऑर्डर प्राप्त झाली' : 'Order Received');
 
   return (
     <aside
@@ -96,16 +103,16 @@ export const ActiveDiningBar: React.FC = () => {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold text-[#C49A52] uppercase tracking-wider">
-                {activeSession.table_number ? `Table ${activeSession.table_number}` : 'Takeaway'}
+                {activeSession.table_number ? (isMr ? `टेबल ${activeSession.table_number}` : `Table ${activeSession.table_number}`) : (isMr ? 'पार्सल' : 'Takeaway')}
               </span>
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-[11px] text-white/90 font-medium truncate">{statusLabel}</span>
             </div>
             <p className="text-xs font-bold text-white truncate">
-              Running Bill: {formatINR(activeSession.running_final_amount)}
+              {isMr ? 'चालू बिल:' : 'Running Bill:'} {formatINR(activeSession.running_final_amount)}
               {activeSession.orders_count > 1 && (
                 <span className="text-[10px] text-white/70 ml-1 font-normal">
-                  ({activeSession.orders_count} orders in sitting)
+                  {isMr ? `(सत्रातील ${activeSession.orders_count} ऑर्डर्स)` : `(${activeSession.orders_count} orders in sitting)`}
                 </span>
               )}
             </p>
@@ -117,7 +124,7 @@ export const ActiveDiningBar: React.FC = () => {
             onClick={() => navigate(`/track/${activeSession.latest_order_id}`)}
             className="bg-[#C49A52] hover:bg-[#d6aa5f] text-[#282321] font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1 shadow-md cursor-pointer transition-colors"
           >
-            <span>Track & Bill</span>
+            <span>{isMr ? 'ट्रॅक व बिल' : 'Track & Bill'}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>

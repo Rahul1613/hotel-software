@@ -28,7 +28,24 @@ function AppContent() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [tableNumber, setTableNumber] = useState<string | null>(null);
-  const [language, setLanguage] = useState<Language>('mr');
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = localStorage.getItem('ekdant_language');
+    if (saved === 'mr' || saved === 'en') return saved;
+    return 'en'; // Primary default order/customer language is English
+  });
+
+  const handleToggleLanguage = () => {
+    setLanguage(prev => {
+      const next = prev === 'en' ? 'mr' : 'en';
+      localStorage.setItem('ekdant_language', next);
+      return next;
+    });
+  };
+
+  const handleSetLanguage = (lang: Language) => {
+    setLanguage(lang);
+    localStorage.setItem('ekdant_language', lang);
+  };
 
   // Load Table token or dev parameter on boot
   useEffect(() => {
@@ -120,7 +137,7 @@ function AppContent() {
               restaurant={restaurant}
               tableNumber={tableNumber}
               language={language}
-              onToggleLanguage={() => setLanguage(l => (l === 'mr' ? 'en' : 'mr'))}
+              onToggleLanguage={handleToggleLanguage}
               onSelectTable={num => {
                 setTableNumber(num);
                 if (num) localStorage.setItem('ekdant_active_table', num);
@@ -138,6 +155,9 @@ function AppContent() {
               items={menuItems}
               cart={cart}
               tableNumber={tableNumber}
+              language={language}
+              onChangeLanguage={handleSetLanguage}
+              onToggleLanguage={handleToggleLanguage}
               onAddToCart={(item, addons, custom) => handleUpdateCartQty(item, 1)}
               onUpdateCartQty={handleUpdateCartQty}
               onOpenCart={() => setIsCartOpen(true)}
@@ -147,7 +167,7 @@ function AppContent() {
             />
           }
         />
-        <Route path="/track/:orderId" element={<OrderTracking language={language} />} />
+        <Route path="/track/:orderId" element={<OrderTracking language={language} onToggleLanguage={handleToggleLanguage} />} />
         <Route path="/book" element={<TableBooking restaurant={restaurant} onBack={() => navigate('/')} />} />
         <Route path="/reviews" element={<CustomerReviewsPage onBack={() => navigate('/')} />} />
         <Route path="/login" element={<StaffLoginModal />} />
@@ -186,6 +206,7 @@ function AppContent() {
           tableNumber={tableNumber}
           language={language}
           cart={cart}
+          onToggleLanguage={handleToggleLanguage}
           onUpdateCartQty={handleUpdateCartQty}
           onRemoveItem={handleRemoveCartItem}
           onCloseCart={() => setIsCartOpen(false)}
@@ -194,7 +215,7 @@ function AppContent() {
         />
       )}
       {/* Persistent Active Order & Running Bill Bar */}
-      <ActiveDiningBar />
+      <ActiveDiningBar language={language} />
     </>
   );
 }

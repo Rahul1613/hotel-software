@@ -4,13 +4,14 @@ import { FoodBadge } from './FoodBadge';
 import { calculateCartGst, formatINR } from '../utils/money';
 import { apiRequest } from '../api';
 import { translations, type Language } from '../utils/i18n';
-import { X, Trash2, Plus, Minus, ArrowLeft, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { X, Trash2, Plus, Minus, ArrowLeft, CheckCircle2, ShieldCheck, Globe } from 'lucide-react';
 
 interface CartProps {
   restaurant: RestaurantInfo | null;
   tableNumber: string | null;
   language: Language;
   cart: CartItem[];
+  onToggleLanguage?: () => void;
   onUpdateCartQty: (item: any, delta: number) => void;
   onRemoveItem: (index: number) => void;
   onCloseCart: () => void;
@@ -23,6 +24,7 @@ export const CartCheckoutModal: React.FC<CartProps> = ({
   tableNumber,
   language,
   cart,
+  onToggleLanguage,
   onUpdateCartQty,
   onRemoveItem,
   onCloseCart,
@@ -104,9 +106,22 @@ export const CartCheckoutModal: React.FC<CartProps> = ({
               </span>
             </div>
           </div>
-          <button onClick={onCloseCart} className="p-1 rounded-lg hover:bg-white/10 text-white cursor-pointer">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onToggleLanguage && (
+              <button
+                type="button"
+                onClick={onToggleLanguage}
+                className="flex items-center gap-1 bg-white/15 hover:bg-white/25 text-[#C49A52] px-2.5 py-1 rounded-full text-xs font-bold cursor-pointer transition-colors border border-[#C49A52]/40 shadow-2xs"
+                title={language === 'en' ? 'मराठीमध्ये बदला' : 'Switch to English'}
+              >
+                <Globe className="w-3 h-3" />
+                <span>{language === 'en' ? 'मराठी' : 'English'}</span>
+              </button>
+            )}
+            <button onClick={onCloseCart} className="p-1 rounded-lg hover:bg-white/10 text-white cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">

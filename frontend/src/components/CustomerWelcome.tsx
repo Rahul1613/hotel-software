@@ -40,10 +40,11 @@ export const CustomerWelcome: React.FC<WelcomeProps> = ({
         </div>
         <button
           onClick={onToggleLanguage}
-          className="flex items-center gap-1 bg-white/10 hover:bg-white/20 text-[#C49A52] px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer"
+          className="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-[#C49A52] px-3 py-1 rounded-full text-xs font-bold cursor-pointer transition-all border border-[#C49A52]/40 shadow-2xs"
+          title={language === 'en' ? 'मराठीमध्ये बदला (Switch to Marathi)' : 'Switch to English'}
         >
-          <Globe className="w-3 h-3" />
-          <span>{language === 'mr' ? 'English' : 'मराठी'}</span>
+          <Globe className="w-3.5 h-3.5" />
+          <span>{language === 'en' ? 'मराठी' : 'English'}</span>
         </button>
       </div>
 

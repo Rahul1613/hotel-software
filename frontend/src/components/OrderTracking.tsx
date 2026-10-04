@@ -3,7 +3,7 @@ import { EkdantLogo } from './EkdantLogo';
 import { 
   CheckCircle, Clock, Utensils, ChefHat, 
   CheckCheck, ArrowRight, BellRing, RefreshCw, XCircle, 
-  Star, Receipt, Sparkles, ShieldCheck 
+  Star, Receipt, Sparkles, ShieldCheck, Globe 
 } from 'lucide-react';
 import type { Order } from '../types';
 import { formatINR } from '../utils/money';
@@ -14,9 +14,10 @@ import { ReviewModal } from './common/ReviewModal';
 
 interface OrderTrackingProps {
   language: Language;
+  onToggleLanguage?: () => void;
 }
 
-export const OrderTracking: React.FC<OrderTrackingProps> = ({ language }) => {
+export const OrderTracking: React.FC<OrderTrackingProps> = ({ language, onToggleLanguage }) => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const t = translations[language];
@@ -144,11 +145,36 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language }) => {
   }
 
   const steps = [
-    { key: 'RECEIVED', label: 'Order Received', desc: 'Sent to restaurant kitchen', icon: Clock },
-    { key: 'ACCEPTED', label: 'Accepted', desc: 'Kitchen acknowledged order', icon: CheckCircle },
-    { key: 'PREPARING', label: 'Cooking & Preparing', desc: 'Chefs are crafting your dish', icon: ChefHat },
-    { key: 'READY', label: 'Ready to Serve', desc: 'Fresh on pickup tray', icon: Utensils },
-    { key: 'SERVED', label: 'Served at Table', desc: 'Enjoy your meal!', icon: CheckCheck },
+    { 
+      key: 'RECEIVED', 
+      label: language === 'mr' ? 'ऑर्डर प्राप्त झाली' : 'Order Received', 
+      desc: language === 'mr' ? 'किचनमध्ये ऑर्डर पाठवली' : 'Sent to restaurant kitchen', 
+      icon: Clock 
+    },
+    { 
+      key: 'ACCEPTED', 
+      label: language === 'mr' ? 'स्वीकारली' : 'Accepted', 
+      desc: language === 'mr' ? 'किचनने ऑर्डर स्वीकारली' : 'Kitchen acknowledged order', 
+      icon: CheckCircle 
+    },
+    { 
+      key: 'PREPARING', 
+      label: language === 'mr' ? 'तयार होत आहे' : 'Cooking & Preparing', 
+      desc: language === 'mr' ? 'शेफ आपले जेवण बनवत आहेत' : 'Chefs are crafting your dish', 
+      icon: ChefHat 
+    },
+    { 
+      key: 'READY', 
+      label: language === 'mr' ? 'वाढण्यासाठी तयार' : 'Ready to Serve', 
+      desc: language === 'mr' ? 'गरमागरम पिकअप ट्रेवर तयार' : 'Fresh on pickup tray', 
+      icon: Utensils 
+    },
+    { 
+      key: 'SERVED', 
+      label: language === 'mr' ? 'टेबलवर वाढले' : 'Served at Table', 
+      desc: language === 'mr' ? 'स्वादिष्ट भोजनाचा आनंद घ्या!' : 'Enjoy your meal!', 
+      icon: CheckCheck 
+    },
   ];
 
   const currentStatus = order?.status || 'RECEIVED';
@@ -156,8 +182,30 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language }) => {
   const isMealServed = currentStatus === 'SERVED' || currentStatus === 'COMPLETED';
 
   return (
-    <div className="min-h-screen bg-[#FFF9F0] text-[#282321] px-4 py-8 max-w-xl mx-auto flex flex-col justify-between font-sans">
+    <div className="min-h-screen bg-[#FFF9F0] text-[#282321] px-4 py-6 max-w-xl mx-auto flex flex-col justify-between font-sans">
       <div>
+        {/* Navigation & Language Switcher Bar */}
+        <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#C49A52]/20">
+          <button 
+            onClick={() => navigate('/menu')}
+            className="p-1.5 rounded-lg hover:bg-[#641C24]/10 text-[#641C24] transition-colors flex items-center gap-1 text-xs font-bold cursor-pointer"
+          >
+            <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+            <span>{language === 'mr' ? 'मेनूकडे जा' : 'Browse Menu'}</span>
+          </button>
+          
+          {onToggleLanguage && (
+            <button
+              onClick={onToggleLanguage}
+              className="flex items-center gap-1.5 bg-[#641C24]/10 hover:bg-[#641C24]/20 text-[#641C24] px-3 py-1 rounded-full text-xs font-bold cursor-pointer transition-colors border border-[#C49A52]/40 shadow-2xs"
+              title={language === 'en' ? 'मराठीमध्ये बदला (Switch to Marathi)' : 'Switch to English'}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>{language === 'en' ? 'मराठी' : 'English'}</span>
+            </button>
+          )}
+        </div>
+
         {/* Header */}
         <div className="text-center mb-6">
           <EkdantLogo size="sm" showSubtitle={false} />
@@ -165,23 +213,23 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language }) => {
           <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
             <div className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-semibold border border-emerald-300">
               <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Order Active & Logged</span>
+              <span>{language === 'mr' ? 'ऑर्डर सक्रिय व नोंदवली' : 'Order Active & Logged'}</span>
             </div>
             {screenKeptOn && (
               <span className="text-[10px] bg-amber-100 text-amber-900 font-semibold px-2 py-0.5 rounded-full border border-amber-300">
-                💡 Screen kept awake
+                💡 {language === 'mr' ? 'स्क्रीन चालू ठेवली आहे' : 'Screen kept awake'}
               </span>
             )}
           </div>
 
           <h1 className="text-2xl font-serif-royal font-bold text-[#641C24] mt-2">
-            {order?.table_number ? `Table ${order.table_number}` : 'Takeaway Parcel'}
+            {order?.table_number ? `${language === 'mr' ? 'टेबल' : 'Table'} ${order.table_number}` : (language === 'mr' ? 'पार्सल' : 'Takeaway Parcel')}
           </h1>
           <p className="text-xs text-gray-500 font-mono">Order #{order?.order_number}</p>
           
           {order?.estimated_wait_minutes && !isMealServed && (
             <p className="text-xs text-amber-900 font-bold bg-amber-100 px-3.5 py-1.5 rounded-full inline-block mt-2 shadow-2xs border border-amber-300">
-              ⏳ Estimated Preparation: ~{order.estimated_wait_minutes} mins
+              ⏳ {language === 'mr' ? `अंदाजे वेळ: ~${order.estimated_wait_minutes} मिनिटे` : `Estimated Preparation: ~${order.estimated_wait_minutes} mins`}
             </p>
           )}
         </div>

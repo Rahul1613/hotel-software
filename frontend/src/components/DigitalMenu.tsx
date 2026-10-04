@@ -7,12 +7,17 @@ import {
   Clock, X, Check, ArrowLeft, BellRing, Sparkles 
 } from 'lucide-react';
 
+import { translations, type Language } from '../utils/i18n';
+
 interface MenuProps {
   restaurant: RestaurantInfo | null;
   tableNumber: string | null;
   categories: MenuCategory[];
   items: MenuItem[];
   cart: CartItem[];
+  language?: Language;
+  onChangeLanguage?: (lang: Language) => void;
+  onToggleLanguage?: () => void;
   onAddToCart: (item: MenuItem, addons?: any[], customization?: string) => void;
   onUpdateCartQty: (item: MenuItem, delta: number) => void;
   onOpenCart: () => void;
@@ -28,6 +33,9 @@ export const DigitalMenu: React.FC<MenuProps> = ({
   categories,
   items,
   cart,
+  language = 'en',
+  onChangeLanguage,
+  onToggleLanguage,
   onAddToCart,
   onUpdateCartQty,
   onOpenCart,
@@ -36,7 +44,8 @@ export const DigitalMenu: React.FC<MenuProps> = ({
   onRefreshMenu,
   onSelectTable
 }) => {
-  const [lang, setLang] = useState<'en' | 'mr'>('en');
+  const currentLang: Language = language || 'en';
+  const t = translations[currentLang];
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
   const [activeDietFilter, setActiveDietFilter] = useState<'all' | 'veg' | 'non_veg'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -109,17 +118,19 @@ export const DigitalMenu: React.FC<MenuProps> = ({
             {/* Language Switcher */}
             <div className="flex bg-[#641C24]/10 rounded-lg p-0.5 border border-[#C49A52]/40 text-xs font-semibold">
               <button
-                onClick={() => setLang('en')}
-                className={`px-2 py-1 rounded cursor-pointer transition-all ${
-                  lang === 'en' ? 'bg-[#641C24] text-white shadow-2xs' : 'text-[#641C24] hover:bg-white/60'
+                type="button"
+                onClick={() => onChangeLanguage ? onChangeLanguage('en') : onToggleLanguage && onToggleLanguage()}
+                className={`px-2.5 py-1 rounded cursor-pointer transition-all ${
+                  currentLang === 'en' ? 'bg-[#641C24] text-white shadow-2xs font-bold' : 'text-[#641C24] hover:bg-white/60'
                 }`}
               >
                 ENG
               </button>
               <button
-                onClick={() => setLang('mr')}
-                className={`px-2 py-1 rounded cursor-pointer font-marathi transition-all ${
-                  lang === 'mr' ? 'bg-[#641C24] text-white shadow-2xs' : 'text-[#641C24] hover:bg-white/60'
+                type="button"
+                onClick={() => onChangeLanguage ? onChangeLanguage('mr') : onToggleLanguage && onToggleLanguage()}
+                className={`px-2.5 py-1 rounded cursor-pointer font-marathi transition-all ${
+                  currentLang === 'mr' ? 'bg-[#641C24] text-white shadow-2xs font-bold' : 'text-[#641C24] hover:bg-white/60'
                 }`}
               >
                 मराठी
@@ -164,7 +175,7 @@ export const DigitalMenu: React.FC<MenuProps> = ({
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input 
               type="text" 
-              placeholder="Search dishes (e.g. Paneer, Chicken Kolhapuri, Naan, Biryani)..."
+              placeholder={t.search_placeholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-white pl-10 pr-4 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:border-[#641C24] focus:ring-1 focus:ring-[#641C24] shadow-xs"
@@ -191,7 +202,7 @@ export const DigitalMenu: React.FC<MenuProps> = ({
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
               }`}
             >
-              All Dishes
+              {t.all_dishes}
             </button>
             <button
               onClick={() => setActiveDietFilter('veg')}
@@ -202,7 +213,7 @@ export const DigitalMenu: React.FC<MenuProps> = ({
               }`}
             >
               <FoodBadge isVeg={true} size="sm" />
-              <span>Veg Only</span>
+              <span>{t.veg_only}</span>
             </button>
             <button
               onClick={() => setActiveDietFilter('non_veg')}
@@ -213,7 +224,7 @@ export const DigitalMenu: React.FC<MenuProps> = ({
               }`}
             >
               <FoodBadge isVeg={false} size="sm" />
-              <span>Non-Veg Only</span>
+              <span>{t.non_veg_only}</span>
             </button>
           </div>
 
@@ -224,7 +235,7 @@ export const DigitalMenu: React.FC<MenuProps> = ({
               className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-[#852D34] bg-white border border-[#C49A52]/40 px-2.5 py-1 rounded-full hover:bg-amber-50 cursor-pointer"
             >
               <BellRing className="w-3 h-3 text-[#C49A52]" />
-              <span>Call Waiter</span>
+              <span>{t.call_waiter}</span>
             </button>
           )}
         </div>
@@ -239,7 +250,7 @@ export const DigitalMenu: React.FC<MenuProps> = ({
                 : 'bg-white/80 text-gray-700 hover:bg-white border border-gray-200'
             }`}
           >
-            All Categories
+            {t.all_categories}
           </button>
           {categories.map(cat => (
             <button
@@ -265,10 +276,10 @@ export const DigitalMenu: React.FC<MenuProps> = ({
               <Sparkles className="w-6 h-6 text-[#C49A52]" />
             </div>
             <h3 className="font-serif-royal font-bold text-lg text-[#641C24] mb-1">
-              {lang === 'mr' ? 'हॉटेल एकदंत मेनू लोड होत आहे...' : 'Loading Hotel Ekdant Menu...'}
+              {currentLang === 'mr' ? 'हॉटेल एकदंत मेनू लोड होत आहे...' : 'Loading Hotel Ekdant Menu...'}
             </h3>
             <p className="text-gray-600 text-xs mb-4">
-              {lang === 'mr' 
+              {currentLang === 'mr' 
                 ? 'किचन कॅटलॉगशी जोडले जात आहे. कृपया प्रतीक्षा करा किंवा खालील बटण दाबा.' 
                 : 'Connecting to live kitchen catalog. If dishes do not load automatically, tap below.'}
             </p>
@@ -284,10 +295,10 @@ export const DigitalMenu: React.FC<MenuProps> = ({
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-12 bg-white/70 rounded-3xl border border-gray-200 mt-4 shadow-xs p-6">
             <p className="text-gray-700 font-medium text-sm mb-1">
-              {lang === 'mr' ? 'या शोधाशी किंवा फिल्टरशी जुळणारे पदार्थ सापडले नाहीत.' : 'No dishes match your active search or diet filter.'}
+              {currentLang === 'mr' ? 'या शोधाशी किंवा फिल्टरशी जुळणारे पदार्थ सापडले नाहीत.' : 'No dishes match your active search or diet filter.'}
             </p>
             <p className="text-gray-500 text-xs mb-4">
-              {items.length} {lang === 'mr' ? 'पदार्थ उपलब्ध आहेत.' : 'dishes available in total catalog.'}
+              {items.length} {currentLang === 'mr' ? 'पदार्थ उपलब्ध आहेत.' : 'dishes available in total catalog.'}
             </p>
             <button 
               onClick={() => { setSelectedCatId(null); setActiveDietFilter('all'); setSearchQuery(''); }}
@@ -322,12 +333,12 @@ export const DigitalMenu: React.FC<MenuProps> = ({
                       <h3 
                         onClick={() => handleOpenDetail(item)}
                         className={`font-bold text-[#641C24] text-base leading-snug hover:underline cursor-pointer ${
-                          lang === 'mr' ? 'font-marathi text-lg' : 'font-serif-royal'
+                          currentLang === 'mr' ? 'font-marathi text-lg' : 'font-serif-royal'
                         }`}
                       >
-                        {lang === 'mr' && item.marathi_name ? item.marathi_name : item.name}
+                        {currentLang === 'mr' && item.marathi_name ? item.marathi_name : item.name}
                       </h3>
-                      {lang === 'mr' ? (
+                      {currentLang === 'mr' ? (
                         <p className="text-xs text-gray-500 mb-1">{item.name}</p>
                       ) : (
                         item.marathi_name && <p className="font-marathi text-xs text-gray-500 mb-1">{item.marathi_name}</p>
@@ -407,7 +418,7 @@ export const DigitalMenu: React.FC<MenuProps> = ({
           <div className="bg-[#641C24] text-[#FFF9F0] rounded-2xl p-3.5 shadow-2xl border-2 border-[#C49A52] flex items-center justify-between animate-bounce-subtle">
             <div className="flex flex-col">
               <span className="text-[11px] text-[#C49A52] font-semibold tracking-wider uppercase">
-                {totalCartCount} item{totalCartCount > 1 ? 's' : ''} added
+                {totalCartCount} {currentLang === 'mr' ? 'पदार्थ' : `item${totalCartCount > 1 ? 's' : ''}`}
               </span>
               <span className="text-lg font-bold">₹{totalCartSubtotal.toFixed(2)}</span>
             </div>
@@ -415,7 +426,7 @@ export const DigitalMenu: React.FC<MenuProps> = ({
               onClick={onOpenCart}
               className="bg-[#C49A52] hover:bg-[#D98B32] text-[#282321] font-bold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 cursor-pointer shadow-md transition-colors"
             >
-              <span>View Order & Cart</span>
+              <span>{t.view_cart}</span>
               <ShoppingBag className="w-4 h-4" />
             </button>
           </div>
@@ -542,7 +553,7 @@ export const DigitalMenu: React.FC<MenuProps> = ({
               className="w-full bg-[#641C24] hover:bg-[#852D34] text-[#FFF9F0] py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer"
             >
               <Plus className="w-4 h-4 text-[#C49A52]" />
-              <span>Add to Order</span>
+              <span>{t.add_to_cart}</span>
             </button>
           </div>
         </div>
