@@ -67,11 +67,9 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     headers,
   });
 
-  if (res.status === 401) {
-    // If staff endpoint returned 401, clear stale token
-    if (authToken && endpoint.includes('/api/')) {
-      setAuthToken(null);
-    }
+  if (res.status === 401 && endpoint === '/api/auth/me') {
+    // Only clear token if the authentication verification endpoint explicitly rejected it
+    setAuthToken(null);
   }
 
   let data: any = null;

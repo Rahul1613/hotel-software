@@ -3,6 +3,8 @@ node_modules/
 venv/
 .env
 .env.local
+*.key
+.app_secret.key
 
 # Build outputs
 frontend/dist/

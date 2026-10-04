@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from sqlalchemy import (
     create_engine, Column, Integer, BigInteger, String, Text, Float, Boolean, 
-    DateTime, ForeignKey, JSON, Index, UniqueConstraint
+    DateTime, ForeignKey, JSON, Index, UniqueConstraint, text
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship, scoped_session
 from app.config import Config
@@ -415,3 +415,9 @@ class AuditLog(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE menu_items ADD COLUMN preparation_cost INTEGER DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            pass

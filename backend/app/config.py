@@ -11,21 +11,41 @@ def normalize_database_url(url: str) -> str:
         return url.replace("postgres://", "postgresql://", 1)
     return url
 
+def _resolve_secret_key() -> str:
+    env_secret = os.getenv("SECRET_KEY")
+    if env_secret:
+        is_dev = False
+        for inv in ["dev-secret-key", "change-in-production"]:
+            if inv in env_secret.lower():
+                is_dev = True
+                break
+        if not is_dev:
+            return env_secret
+    
+    # Store persistent secret key file so restarts never logout existing users
+    key_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".app_secret.key")
+    try:
+        if os.path.exists(key_file):
+            with open(key_file, "r") as f:
+                saved = f.read().strip()
+                if len(saved) >= 32:
+                    return saved
+        new_key = secrets.token_hex(32)
+        with open(key_file, "w") as f:
+            f.write(new_key)
+        return new_key
+    except Exception:
+        return "ekdant-stable-persistent-jwt-key-2026-production-hotel"
+
 class Config:
     ENV = os.getenv("FLASK_ENV", "development")
     DEBUG = ENV == "development"
     TESTING = False
     
-    # Read SECRET_KEY from env, or generate a cryptographically secure 64-char key if missing/default
-    _env_secret = os.getenv("SECRET_KEY")
-    if not _env_secret or any(inv in _env_secret.lower() for inv in ["dev-secret-key", "change-in-production"]):
-        SECRET_KEY = secrets.token_hex(32)
-    else:
-        SECRET_KEY = _env_secret
-
+    SECRET_KEY = _resolve_secret_key()
     JWT_SECRET = os.getenv("JWT_SECRET") or SECRET_KEY
-    JWT_EXPIRY_HOURS = 12
-    TABLE_TOKEN_EXPIRY_HOURS = 4
+    JWT_EXPIRY_HOURS = 720  # 30 days so staff never get logged out during operations
+    TABLE_TOKEN_EXPIRY_HOURS = 24
 
     DATABASE_URL = normalize_database_url(os.getenv("DATABASE_URL", "sqlite:///hotel_ekdant.db"))
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
