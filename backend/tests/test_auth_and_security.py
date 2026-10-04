@@ -17,11 +17,14 @@ def app():
 def client(app):
     return app.test_client()
 
+import os
+
 def test_login_and_auth_flow(client):
+    owner_pwd = os.getenv("INITIAL_OWNER_PASSWORD", "EkdantOwner@2026")
     # Test valid login
     res = client.post('/api/auth/login', json={
         'username': 'owner',
-        'password': 'EkdantOwner@2026'
+        'password': owner_pwd
     })
     assert res.status_code == 200
     data = res.get_json()
