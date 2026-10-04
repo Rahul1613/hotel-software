@@ -2,7 +2,7 @@ import React from 'react';
 import { EkdantLogo } from './EkdantLogo';
 import { 
   UtensilsCrossed, CalendarCheck, Phone, MessageSquare, 
-  Award, ShieldCheck, ChevronRight, Globe 
+  Award, ShieldCheck, ChevronRight, Globe, ChefHat, ArrowRight 
 } from 'lucide-react';
 import type { RestaurantInfo } from '../types';
 import { useNavigate } from 'react-router-dom';
@@ -27,6 +27,7 @@ export const CustomerWelcome: React.FC<WelcomeProps> = ({
   const t = translations[language];
   const phone = restaurant?.phone || '+91 98234 56789';
   const whatsappNumber = (restaurant?.whatsapp || '919823456789').replace(/[^0-9]/g, '');
+  const activeOrderId = localStorage.getItem('ekdant_active_order_id');
 
   return (
     <div className="min-h-screen bg-[#FFF9F0] text-[#282321] flex flex-col justify-between selection:bg-[#C49A52] selection:text-white">
@@ -106,6 +107,33 @@ export const CustomerWelcome: React.FC<WelcomeProps> = ({
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Active Dining Order Alert (Customer Never Loses Their Order) */}
+        {activeOrderId && (
+          <div className="w-full bg-[#641C24] text-[#FFF9F0] border-2 border-[#C49A52] rounded-2xl p-4 mb-6 shadow-xl flex items-center justify-between gap-3 text-left">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#FFF9F0]/10 border border-[#C49A52]/50 flex items-center justify-center shrink-0">
+                <ChefHat className="w-5 h-5 text-[#C49A52] animate-bounce" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs uppercase tracking-wider text-[#C49A52] font-bold">
+                    Active Order in Kitchen
+                  </span>
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                </div>
+                <p className="text-sm font-bold text-white mt-0.5">Your meal is currently in progress</p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate(`/track/${activeOrderId}`)}
+              className="bg-[#C49A52] hover:bg-[#d6aa5f] text-[#282321] font-bold py-2.5 px-4 rounded-xl text-xs flex items-center gap-1.5 shadow-md shrink-0 cursor-pointer transition-colors"
+            >
+              <span>Track Live Bill</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         )}
 

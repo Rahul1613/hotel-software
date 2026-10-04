@@ -83,13 +83,106 @@ def list_orders():
     finally:
         db.close()
 
+@orders_bp.route('/active-session', methods=['GET'])
+def get_active_dining_session():
+    """
+    Returns active dining session, orders, and running bill for a table or customer token.
+    Allows customers to view preparation progress and running bill without losing context.
+    """
+    token = request.args.get('token')
+    order_token = request.args.get('order_token')
+    table_num = request.args.get('table')
+
+    db = SessionLocal()
+    try:
+        session = None
+        # 1. Order access token
+        if order_token:
+            payload = decode_order_token(order_token)
+            if payload:
+                ord_id = payload.get('order_id')
+                o = db.query(Order).get(ord_id)
+                if o and o.session:
+                    session = o.session
+        # 2. Table session token
+        if not session and token:
+            payload = decode_table_session_token(token)
+            if payload:
+                sess_id = payload.get('session_id')
+                session = db.query(TableSession).get(sess_id)
+        # 3. Table number fallback
+        if not session and table_num:
+            formatted = str(table_num).zfill(2)
+            tbl = db.query(RestaurantTable).filter(RestaurantTable.table_number == formatted, RestaurantTable.is_active == True).first()
+            if tbl:
+                session = db.query(TableSession).filter(
+                    TableSession.table_id == tbl.id,
+                    TableSession.status.in_(["OPEN", "BILL_REQUESTED", "BILLED"])
+                ).order_by(TableSession.opened_at.desc()).first()
+
+        if not session:
+            return jsonify({"active": False, "message": "No active dining session found."}), 200
+
+        orders = [o for o in session.orders if o.status != "CANCELLED"]
+        if not orders:
+            return jsonify({"active": False, "session_id": session.id, "message": "No active orders in session."}), 200
+
+        total_subtotal_paise = sum(o.subtotal for o in orders)
+        total_final_paise = sum(o.final_amount for o in orders)
+        all_served = len(orders) > 0 and all(o.status in ("SERVED", "COMPLETED") for o in orders)
+        is_billed = session.status in ("BILLED", "CLOSED")
+        latest_order = orders[-1]
+
+        items_summary = []
+        for o in orders:
+            for it in o.items:
+                if it.item_status != "CANCELLED":
+                    items_summary.append({
+                        "id": it.id,
+                        "order_id": o.id,
+                        "order_number": o.order_number,
+                        "item_name": it.item_name,
+                        "quantity": it.quantity,
+                        "price": paise_to_rupees(it.price),
+                        "total_price": paise_to_rupees(it.total_price),
+                        "item_status": it.item_status
+                    })
+
+        return jsonify({
+            "active": True,
+            "session_id": session.id,
+            "table_id": session.table_id,
+            "table_number": session.table.table_number if session.table else None,
+            "table_name": session.table.name if session.table else "Takeaway",
+            "section": session.table.section if session.table else "Takeaway",
+            "session_status": session.status,
+            "all_served": all_served,
+            "is_billed": is_billed,
+            "invoice_id": session.invoice_id,
+            "orders_count": len(orders),
+            "latest_order_id": latest_order.id,
+            "latest_order_number": latest_order.order_number,
+            "latest_order_status": latest_order.status,
+            "running_subtotal": paise_to_rupees(total_subtotal_paise),
+            "running_final_amount": paise_to_rupees(total_final_paise),
+            "items": items_summary,
+            "orders": [{
+                "id": o.id,
+                "order_number": o.order_number,
+                "status": o.status,
+                "items_count": len(o.items),
+                "final_amount": paise_to_rupees(o.final_amount),
+                "created_at": o.created_at.isoformat() if o.created_at else None
+            } for o in orders]
+        })
+    finally:
+        db.close()
+
 @orders_bp.route('/<int:order_id>', methods=['GET'])
 def get_single_order(order_id):
     """
     Get order details.
-    Accessible ONLY to:
-    1. Authenticated staff, OR
-    2. Customer with valid signed `order_token` (prevents data leak).
+    Accessible to authenticated staff, customer with order_token, or customer with table_session_token.
     """
     staff_user = get_current_user()
     token = request.args.get('token')
@@ -101,6 +194,16 @@ def get_single_order(order_id):
         payload = decode_order_token(token)
         if payload and payload.get('order_id') == order_id:
             authorized = True
+        else:
+            session_payload = decode_table_session_token(token)
+            if session_payload:
+                db_auth = SessionLocal()
+                try:
+                    o_auth = db_auth.query(Order).get(order_id)
+                    if o_auth and o_auth.session_id == session_payload.get('session_id'):
+                        authorized = True
+                finally:
+                    db_auth.close()
 
     if not authorized:
         return jsonify({"error": {"code": "FORBIDDEN", "message": "Access token required to view order."}}), 403

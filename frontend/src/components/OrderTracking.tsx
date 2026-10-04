@@ -2,13 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { EkdantLogo } from './EkdantLogo';
 import { 
   CheckCircle, Clock, Utensils, ChefHat, 
-  CheckCheck, ArrowRight, BellRing, RefreshCw, XCircle 
+  CheckCheck, ArrowRight, BellRing, RefreshCw, XCircle, 
+  Star, Receipt, Sparkles, ShieldCheck 
 } from 'lucide-react';
 import type { Order } from '../types';
 import { formatINR } from '../utils/money';
 import { apiRequest } from '../api';
 import { useParams, useNavigate } from 'react-router-dom';
 import { translations, type Language } from '../utils/i18n';
+import { ReviewModal } from './common/ReviewModal';
 
 interface OrderTrackingProps {
   language: Language;
@@ -20,27 +22,73 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language }) => {
   const t = translations[language];
 
   const [order, setOrder] = useState<Order | null>(null);
+  const [sessionData, setSessionData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [screenKeptOn, setScreenKeptOn] = useState(false);
 
-  const fetchOrder = async () => {
+  // 1. Screen Wake Lock: Keep phone screen ON while waiting for food
+  useEffect(() => {
+    let wakeLockSentinel: any = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+          setScreenKeptOn(true);
+        }
+      } catch (err) {
+        console.log('Screen WakeLock not granted or supported:', err);
+      }
+    };
+    requestWakeLock();
+
+    return () => {
+      if (wakeLockSentinel) {
+        wakeLockSentinel.release().catch(() => {});
+      }
+    };
+  }, []);
+
+  // 2. Fetch order & active session details
+  const fetchOrderAndSession = async () => {
     if (!orderId) return;
     try {
       const savedToken = localStorage.getItem(`order_token_${orderId}`);
       const url = savedToken ? `/api/orders/${orderId}?token=${savedToken}` : `/api/orders/${orderId}`;
       const data = await apiRequest<Order>(url);
       setOrder(data);
+
+      // Persist active order so user never loses it even if they navigate away
+      localStorage.setItem('ekdant_active_order_id', String(data.id));
+      if (data.table_number) {
+        localStorage.setItem('ekdant_active_table', data.table_number);
+      }
+
+      // Fetch consolidated table session running bill
+      const sessUrl = savedToken
+        ? `/api/orders/active-session?order_token=${savedToken}`
+        : data.table_number
+        ? `/api/orders/active-session?table=${data.table_number}`
+        : null;
+
+      if (sessUrl) {
+        const sData = await apiRequest<any>(sessUrl);
+        if (sData && sData.active) {
+          setSessionData(sData);
+        }
+      }
     } catch (e) {
-      console.error(e);
+      console.error('Failed to load order', e);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchOrder();
-    const interval = setInterval(fetchOrder, 25000); // 25s fallback poll
+    fetchOrderAndSession();
+    const interval = setInterval(fetchOrderAndSession, 15000); // 15s poll
     return () => clearInterval(interval);
   }, [orderId]);
 
@@ -56,7 +104,8 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language }) => {
           reason: cancelReason || 'Cancelled by guest',
         }),
       });
-      fetchOrder();
+      localStorage.removeItem('ekdant_active_order_id');
+      fetchOrderAndSession();
     } catch (err: any) {
       alert(err.message || 'Cannot cancel order');
     } finally {
@@ -65,12 +114,13 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language }) => {
   };
 
   const handleServiceRequest = async (type: string) => {
-    if (!order?.table_number) return;
+    const tbl = order?.table_number || sessionData?.table_number;
+    if (!tbl) return;
     try {
       await apiRequest('/api/service-requests', {
         method: 'POST',
         body: JSON.stringify({
-          table_number: order.table_number,
+          table_number: tbl,
           request_type: type,
         }),
       });
@@ -78,6 +128,11 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language }) => {
     } catch (err: any) {
       alert(err.message);
     }
+  };
+
+  const handleFinishSitting = () => {
+    localStorage.removeItem('ekdant_active_order_id');
+    navigate('/');
   };
 
   if (loading && !order) {
@@ -98,34 +153,46 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language }) => {
 
   const currentStatus = order?.status || 'RECEIVED';
   const activeStepIdx = steps.findIndex(s => s.key === currentStatus);
+  const isMealServed = currentStatus === 'SERVED' || currentStatus === 'COMPLETED';
 
   return (
     <div className="min-h-screen bg-[#FFF9F0] text-[#282321] px-4 py-8 max-w-xl mx-auto flex flex-col justify-between font-sans">
       <div>
+        {/* Header */}
         <div className="text-center mb-6">
           <EkdantLogo size="sm" showSubtitle={false} />
-          <div className="mt-4 inline-flex items-center gap-2 bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-semibold border border-emerald-300">
-            <CheckCircle className="w-4 h-4 text-emerald-600" />
-            <span>Order Confirmed & Logged</span>
+          
+          <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
+            <div className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-semibold border border-emerald-300">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Order Active & Logged</span>
+            </div>
+            {screenKeptOn && (
+              <span className="text-[10px] bg-amber-100 text-amber-900 font-semibold px-2 py-0.5 rounded-full border border-amber-300">
+                💡 Screen kept awake
+              </span>
+            )}
           </div>
+
           <h1 className="text-2xl font-serif-royal font-bold text-[#641C24] mt-2">
             {order?.table_number ? `Table ${order.table_number}` : 'Takeaway Parcel'}
           </h1>
           <p className="text-xs text-gray-500 font-mono">Order #{order?.order_number}</p>
-          {order?.estimated_wait_minutes && order.status !== 'SERVED' && order.status !== 'COMPLETED' && (
-            <p className="text-xs text-amber-900 font-bold bg-amber-100 px-3 py-1 rounded-full inline-block mt-2">
-              ⏳ Estimated Wait: ~{order.estimated_wait_minutes} mins
+          
+          {order?.estimated_wait_minutes && !isMealServed && (
+            <p className="text-xs text-amber-900 font-bold bg-amber-100 px-3.5 py-1.5 rounded-full inline-block mt-2 shadow-2xs border border-amber-300">
+              ⏳ Estimated Preparation: ~{order.estimated_wait_minutes} mins
             </p>
           )}
         </div>
 
-        {/* Stepper */}
+        {/* Live Stepper */}
         <div className="bg-white rounded-2xl p-5 border border-[#C49A52]/30 shadow-sm mb-6">
           <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
-              Live Preparation Status
+              Live Cooking & Serving Status
             </span>
-            <button onClick={fetchOrder} className="text-xs text-[#641C24] flex items-center gap-1 cursor-pointer">
+            <button onClick={fetchOrderAndSession} className="text-xs text-[#641C24] flex items-center gap-1 cursor-pointer font-semibold">
               <RefreshCw className="w-3 h-3" /> Refresh
             </button>
           </div>
@@ -176,28 +243,72 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language }) => {
           )}
         </div>
 
-        {/* Order Details */}
+        {/* Meal Served & Review Prompt Card */}
+        {isMealServed && (
+          <div className="bg-gradient-to-br from-[#FFF9F0] to-amber-50 rounded-2xl p-5 border-2 border-[#C49A52] shadow-md mb-6 text-center space-y-3">
+            <div className="w-12 h-12 bg-[#641C24] text-[#C49A52] rounded-full flex items-center justify-center mx-auto shadow-sm">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-serif-royal font-bold text-[#641C24]">
+                Meal Served! जेवणाचा आनंद घ्या!
+              </h3>
+              <p className="text-xs text-gray-600 mt-1">
+                Hope you are enjoying your food. Before you finish, please share your valuable review with us.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsReviewOpen(true)}
+              className="w-full bg-[#641C24] hover:bg-[#852D34] text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+            >
+              <Star className="w-4 h-4 text-[#C49A52] fill-[#C49A52]" />
+              <span>Leave a Review & Complete Sitting</span>
+            </button>
+          </div>
+        )}
+
+        {/* Consolidated Table Bill & Items */}
         <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm mb-6">
-          <h3 className="font-serif-royal font-bold text-[#641C24] text-sm mb-3">Order Details</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-serif-royal font-bold text-[#641C24] text-sm flex items-center gap-1.5">
+              <Receipt className="w-4 h-4 text-[#C49A52]" />
+              <span>
+                {sessionData && sessionData.orders_count > 1
+                  ? `Consolidated Table Bill (${sessionData.orders_count} Orders)`
+                  : 'Order Details'}
+              </span>
+            </h3>
+            <span className="text-[10px] text-gray-400 font-mono">
+              Table {order?.table_number || 'Takeaway'}
+            </span>
+          </div>
+
+          {/* List items across session or this order */}
           <div className="space-y-2 text-xs divide-y divide-gray-100">
-            {order?.items.map(it => (
+            {(sessionData?.items || order?.items || []).map((it: any) => (
               <div key={it.id} className="pt-2 first:pt-0 flex items-center justify-between">
                 <div>
-                  <span className="font-medium text-gray-800">{it.item_name}</span>
+                  <span className="font-medium text-gray-900">{it.item_name}</span>
                   <span className="text-gray-500 ml-1.5 font-bold">× {it.quantity}</span>
+                  {it.order_number && (
+                    <span className="text-[10px] text-gray-400 block font-mono">
+                      #{it.order_number} ({it.item_status})
+                    </span>
+                  )}
                 </div>
-                <span className="font-semibold text-gray-700">{formatINR(it.total_price)}</span>
+                <span className="font-semibold text-gray-800">{formatINR(it.total_price)}</span>
               </div>
             ))}
           </div>
 
-          <div className="border-t border-gray-200 mt-4 pt-3 flex justify-between font-bold text-sm text-[#641C24]">
-            <span>Bill Total (GST Inc):</span>
-            <span>{formatINR(order?.final_amount || 0)}</span>
+          {/* Running total */}
+          <div className="border-t-2 border-dashed border-[#C49A52]/40 mt-4 pt-3 flex justify-between font-bold text-base text-[#641C24]">
+            <span>Total Bill Payable (GST Inc):</span>
+            <span>{formatINR(sessionData?.running_final_amount || order?.final_amount || 0)}</span>
           </div>
         </div>
 
-        {/* Call Waiter */}
+        {/* Service Requests (Call Waiter / Water) */}
         {order?.table_number && (
           <div className="grid grid-cols-2 gap-2 mb-6">
             <button
@@ -217,15 +328,36 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language }) => {
         )}
       </div>
 
-      <div className="space-y-3 pt-4 border-t border-gray-200">
+      {/* Navigation Buttons: Order More or Finish */}
+      <div className="space-y-2 pt-4 border-t border-gray-200">
         <button
           onClick={() => navigate('/menu')}
           className="w-full bg-[#641C24] hover:bg-[#852D34] text-[#FFF9F0] py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer"
         >
-          <span>{t.order_more}</span>
+          <span>🍽️ {t.order_more}</span>
           <ArrowRight className="w-4 h-4 text-[#C49A52]" />
         </button>
+
+        {isMealServed && (
+          <button
+            onClick={() => setIsReviewOpen(true)}
+            className="w-full bg-[#C49A52] hover:bg-[#d4aa5d] text-[#282321] py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+          >
+            <Star className="w-3.5 h-3.5" />
+            <span>Rate Dining & Close Sitting</span>
+          </button>
+        )}
       </div>
+
+      {/* Review Modal */}
+      <ReviewModal
+        isOpen={isReviewOpen}
+        onClose={() => setIsReviewOpen(false)}
+        orderId={order?.id}
+        orderNumber={order?.order_number}
+        customerName={order?.customer_name}
+        onSuccess={handleFinishSitting}
+      />
     </div>
   );
 };

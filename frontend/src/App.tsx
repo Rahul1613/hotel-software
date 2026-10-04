@@ -13,6 +13,7 @@ import { KitchenDisplaySystem } from './components/KitchenDisplaySystem';
 import { AdminPanel } from './components/AdminPanel';
 import { StaffLoginModal } from './components/StaffLoginModal';
 import { CartCheckoutModal } from './components/CartCheckoutModal';
+import { ActiveDiningBar } from './components/common/ActiveDiningBar';
 
 import type { RestaurantInfo, MenuCategory, MenuItem, CartItem } from './types';
 import { apiRequest, setTableSessionToken } from './api';
@@ -99,6 +100,10 @@ function AppContent() {
   const handleOrderSuccess = (orderData: any) => {
     if (orderData.order_token) {
       localStorage.setItem(`order_token_${orderData.order_id}`, orderData.order_token);
+    }
+    localStorage.setItem('ekdant_active_order_id', String(orderData.order_id));
+    if (orderData.table_number) {
+      localStorage.setItem('ekdant_active_table', orderData.table_number);
     }
     setCart([]);
     setIsCartOpen(false);
@@ -188,6 +193,8 @@ function AppContent() {
           onSelectTable={t => setTableNumber(t)}
         />
       )}
+      {/* Persistent Active Order & Running Bill Bar */}
+      <ActiveDiningBar />
     </>
   );
 }
