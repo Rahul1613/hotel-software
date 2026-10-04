@@ -1,0 +1,50 @@
+name: Hotel Ekdant CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+      - name: Run Pytest
+        env:
+          INITIAL_OWNER_PASSWORD: TestPassword123!
+          SECRET_KEY: test-secret-key-min-32-characters-long
+          JWT_SECRET: test-jwt-secret-min-32-characters-long
+        run: |
+          cd backend
+          PYTHONPATH=. pytest tests/ -v
+
+  frontend-test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+      - name: Run Vitest
+        run: |
+          cd frontend
+          npx vitest run
+      - name: Build production bundle
+        run: |
+          cd frontend
+          npm run build

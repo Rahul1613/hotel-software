@@ -5,6 +5,26 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     region: singapore
+    healthCheckPath: /healthz
     envVars:
       - key: PORT
         value: 10000
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hotel-ekdant-db
+          property: connectionString
+      - key: INITIAL_OWNER_PASSWORD
+        sync: false
+      - key: TZ
+        value: Asia/Kolkata
+
+databases:
+  - name: hotel-ekdant-db
+    plan: free
+    region: singapore

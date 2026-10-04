@@ -184,9 +184,9 @@ export const CustomerReviewsPage: React.FC<ReviewsProps> = ({ onBack }) => {
                   </div>
                 </div>
                 <p className="text-gray-700 leading-relaxed">{rev.comment}</p>
-                {rev.reply && (
+                {rev.manager_reply && (
                   <div className="mt-2 bg-[#FFF9F0] p-2.5 rounded-xl border border-[#C49A52]/30 text-[11px] text-gray-800">
-                    <strong className="text-[#641C24]">Hotel Ekdant Management:</strong> {rev.reply}
+                    <strong className="text-[#641C24]">Hotel Ekdant Management:</strong> {rev.manager_reply}
                   </div>
                 )}
                 <span className="text-[10px] text-gray-400 block pt-1">{rev.created_at}</span>

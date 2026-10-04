@@ -1,103 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import { EkdantLogo } from './EkdantLogo';
 import { soundManager } from '../utils/soundManager';
-import type { Order, RestaurantTable, ServiceRequest, UserStaff } from '../types';
+import type { Order, RestaurantTable, ServiceRequest, MenuItem } from '../types';
+import { apiRequest } from '../api';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { OrderCard } from '../features/orders/OrderCard';
+import { ManualOrderModal } from '../features/orders/ManualOrderModal';
+import { BillModal } from '../features/billing/BillModal';
+import { TableGrid } from '../features/tables/TableGrid';
+import { printViaHiddenIframe } from '../utils/printer';
 import { 
-  Bell, Volume2, VolumeX, CheckCircle, Clock, 
-  ChefHat, Utensils, IndianRupee, RefreshCw, 
-  CheckCheck, AlertTriangle, FileText, Printer, Eye 
+  Bell, Volume2, VolumeX, ChefHat, RefreshCw, 
+  Printer, Plus, Wifi, WifiOff 
 } from 'lucide-react';
 
-interface StaffDashboardProps {
-  currentUser: UserStaff;
-  onLogout: () => void;
-  onOpenKitchenView: () => void;
-  onOpenAdmin: () => void;
-}
+export const StaffDashboard: React.FC = () => {
+  const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
 
-export const StaffDashboard: React.FC<StaffDashboardProps> = ({
-  currentUser,
-  onLogout,
-  onOpenKitchenView,
-  onOpenAdmin
-}) => {
   const [activeTab, setActiveTab] = useState<'orders' | 'tables' | 'requests'>('orders');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [orders, setOrders] = useState<Order[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  
   const [soundActive, setSoundActive] = useState<boolean>(true);
-  const [lastOrderCount, setLastOrderCount] = useState<number>(0);
-  const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<Order | null>(null);
-  const [printingKotOrder, setPrintingKotOrder] = useState<Order | null>(null);
-  const [reprintOrder, setReprintOrder] = useState<Order | null>(null);
-
-  // Bill Generation modal state
-  const [discountAmount, setDiscountAmount] = useState<number>(0);
-  const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
-  const [isGeneratingBill, setIsGeneratingBill] = useState<boolean>(false);
-
-  // Hidden iframe printer helper to guarantee printing across all browsers without popup blockage
-  const printUrlViaIframe = (url: string) => {
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
-
-    iframe.onload = () => {
-      setTimeout(() => {
-        try {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
-        } catch (err) {
-          console.error('Direct print failed, opening in new tab:', err);
-          window.open(url, '_blank');
-        }
-        setTimeout(() => {
-          try {
-            document.body.removeChild(iframe);
-          } catch {}
-        }, 3000);
-      }, 300);
-    };
-    iframe.src = url;
-  };
+  const [isSocketConnected, setIsSocketConnected] = useState<boolean>(true);
+  const [isManualOrderOpen, setIsManualOrderOpen] = useState<boolean>(false);
+  const [selectedBillOrder, setSelectedBillOrder] = useState<Order | null>(null);
 
   const fetchDashboardData = async () => {
     try {
-      const [ordRes, tblRes, reqRes] = await Promise.all([
-        fetch('/api/orders'),
-        fetch('/api/tables'),
-        fetch('/api/service-requests')
+      const [ordData, tblData, reqData, menuData] = await Promise.all([
+        apiRequest<Order[]>('/api/orders'),
+        apiRequest<RestaurantTable[]>('/api/tables'),
+        apiRequest<ServiceRequest[]>('/api/service-requests'),
+        apiRequest<MenuItem[]>('/api/menu?include_unavailable=false'),
       ]);
 
-      const [ordData, tblData, reqData] = await Promise.all([
-        ordRes.json(),
-        tblRes.json(),
-        reqRes.json()
-      ]);
-
-      if (Array.isArray(ordData)) {
-        if (lastOrderCount > 0 && ordData.length > lastOrderCount) {
-          // Play loud chime
-          soundManager.playNewOrderAlert();
-        }
-        setLastOrderCount(ordData.length);
-        setOrders(ordData);
-      }
-
+      if (Array.isArray(ordData)) setOrders(ordData);
       if (Array.isArray(tblData)) setTables(tblData);
-      if (Array.isArray(reqData)) {
-        if (reqData.length > 0) {
-          // Play notification chime
-          soundManager.playWaiterCallAlert();
-        }
-        setServiceRequests(reqData);
-      }
+      if (Array.isArray(reqData)) setServiceRequests(reqData);
+      if (Array.isArray(menuData)) setMenuItems(menuData);
     } catch (e) {
       console.error(e);
     }
@@ -105,36 +51,16 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
 
   useEffect(() => {
     fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 3500);
+    // 25 second fallback poll only (no spammy 3s poll)
+    const interval = setInterval(fetchDashboardData, 25000);
     return () => clearInterval(interval);
-  }, [lastOrderCount]);
-
-  const handleToggleSound = () => {
-    const next = !soundActive;
-    setSoundActive(next);
-    soundManager.setSoundEnabled(next);
-    if (next) soundManager.enableAudio();
-  };
+  }, []);
 
   const handleUpdateOrderStatus = async (orderId: number, newStatus: string) => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/status`, {
+      await apiRequest(`/api/orders/${orderId}/status`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
-      if (res.ok) fetchDashboardData();
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleResolveServiceRequest = async (id: number) => {
-    try {
-      await fetch('/api/service-requests', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: 'RESOLVED' })
+        body: JSON.stringify({ status: newStatus }),
       });
       fetchDashboardData();
     } catch (e) {
@@ -142,92 +68,78 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
     }
   };
 
-  const handleGenerateInvoice = async () => {
-    if (!selectedInvoiceOrder) return;
-    setIsGeneratingBill(true);
-
+  const handleResolveServiceRequest = async (id: number) => {
     try {
-      const res = await fetch('/api/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order_id: selectedInvoiceOrder.id,
-          discount_amount: discountAmount,
-          payment_method: paymentMethod,
-          payment_status: 'PAID'
-        })
+      await apiRequest(`/api/service-requests/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'RESOLVED' }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        // Open PDF in new tab
-        window.open(`/api/invoices/${data.invoice_id}/pdf?format=A4`, '_blank');
-        setSelectedInvoiceOrder(null);
-        fetchDashboardData();
-      }
+      fetchDashboardData();
     } catch (e) {
       console.error(e);
-    } finally {
-      setIsGeneratingBill(false);
     }
   };
 
-  // Filter orders
-  const filteredOrders = orders.filter(o => {
-    if (statusFilter === 'ALL') return true;
-    return o.status === statusFilter;
-  });
-
-  // Calculate live stats
+  const filteredOrders = orders.filter(o => statusFilter === 'ALL' || o.status === statusFilter);
   const activeOrdersCount = orders.filter(o => ['RECEIVED', 'ACCEPTED', 'PREPARING', 'READY'].includes(o.status)).length;
   const todayRevenue = orders
     .filter(o => o.status !== 'CANCELLED')
-    .reduce((sum, o) => sum + o.final_amount, 0);
+    .reduce((sum, o) => sum + (o.final_amount || 0), 0);
 
   return (
-    <div className="min-h-screen bg-[#F3F1ED] text-[#282321] flex flex-col">
+    <div className="min-h-screen bg-[#F3F1ED] text-[#282321] flex flex-col font-sans">
       {/* Top Bar */}
       <header className="bg-[#641C24] text-[#FFF9F0] px-4 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4 shadow-md border-b border-[#C49A52]">
         <div className="flex items-center gap-4">
           <EkdantLogo size="sm" variant="light" showSubtitle={false} />
           <div className="border-l border-[#C49A52]/50 pl-4 hidden sm:block">
-            <span className="text-xs uppercase tracking-wider text-[#C49A52] font-semibold">Live Staff & Order Desk</span>
-            <p className="text-xs text-white/80">{currentUser.full_name} ({currentUser.role.toUpperCase()})</p>
+            <span className="text-xs uppercase tracking-wider text-[#C49A52] font-semibold">Staff & Billing Desk</span>
+            <p className="text-xs text-white/80">{currentUser?.full_name} ({currentUser?.role.toUpperCase()})</p>
           </div>
         </div>
 
-        {/* Action Controls */}
         <div className="flex items-center gap-2.5">
-          <button 
-            onClick={handleToggleSound}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+          <button
+            onClick={() => {
+              const next = !soundActive;
+              setSoundActive(next);
+              soundManager.setSoundEnabled(next);
+              if (next) soundManager.enableAudio();
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
               soundActive ? 'bg-[#258451] text-white' : 'bg-gray-700 text-gray-300'
             }`}
           >
             {soundActive ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            <span>{soundActive ? 'Sound Alerts ON' : 'Muted'}</span>
+            <span>{soundActive ? 'Alerts ON' : 'Muted'}</span>
           </button>
 
-          <button 
-            onClick={onOpenKitchenView}
+          <button
+            onClick={() => setIsManualOrderOpen(true)}
+            className="bg-white/10 hover:bg-white/20 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 text-[#C49A52]" />
+            <span>+ New Order</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/kitchen')}
             className="bg-[#C49A52] hover:bg-[#D98B32] text-[#282321] font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 cursor-pointer"
           >
             <ChefHat className="w-4 h-4" />
             <span className="hidden sm:inline">Kitchen Screen</span>
           </button>
 
-          {['owner', 'manager', 'admin'].includes(currentUser.role) && (
-            <button 
-              onClick={onOpenAdmin}
+          {['owner', 'manager'].includes(currentUser?.role || '') && (
+            <button
+              onClick={() => navigate('/admin')}
               className="bg-white/10 hover:bg-white/20 text-white font-medium px-3 py-1.5 rounded-lg text-xs cursor-pointer"
             >
               Admin Panel
             </button>
           )}
 
-          <button 
-            onClick={onLogout}
-            className="text-xs text-red-200 hover:text-white underline cursor-pointer ml-2"
-          >
+          <button onClick={logout} className="text-xs text-red-200 hover:text-white underline cursor-pointer ml-2">
             Logout
           </button>
         </div>
@@ -235,50 +147,50 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
 
       {/* Stats Bar */}
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-8 pt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs">
+        <div className="bg-white p-3.5 rounded-2xl border border-gray-200">
           <span className="text-[11px] text-gray-500 font-bold uppercase">Pending Active Orders</span>
           <p className="text-2xl font-bold text-[#641C24]">{activeOrdersCount}</p>
         </div>
-        <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs">
+        <div className="bg-white p-3.5 rounded-2xl border border-gray-200">
           <span className="text-[11px] text-gray-500 font-bold uppercase">Today's Sales</span>
           <p className="text-2xl font-bold text-[#258451]">₹{todayRevenue.toFixed(0)}</p>
         </div>
-        <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs">
+        <div className="bg-white p-3.5 rounded-2xl border border-gray-200">
           <span className="text-[11px] text-gray-500 font-bold uppercase">Active Tables</span>
           <p className="text-2xl font-bold text-amber-700">
             {tables.filter(t => t.status !== 'AVAILABLE').length} / 11
           </p>
         </div>
-        <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs">
+        <div className="bg-white p-3.5 rounded-2xl border border-gray-200">
           <span className="text-[11px] text-gray-500 font-bold uppercase">Waiter Calls</span>
           <p className="text-2xl font-bold text-rose-600">{serviceRequests.length}</p>
         </div>
       </div>
 
-      {/* Main Tab Navigation */}
+      {/* Main Tab Bar */}
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-8 pt-5">
         <div className="flex items-center justify-between border-b border-gray-300 pb-2">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('orders')}
-              className={`px-4 py-2 font-bold text-sm rounded-xl cursor-pointer transition-all ${
-                activeTab === 'orders' ? 'bg-[#641C24] text-white shadow-xs' : 'text-gray-600 hover:bg-gray-200'
+              className={`px-4 py-2 font-bold text-sm rounded-xl cursor-pointer ${
+                activeTab === 'orders' ? 'bg-[#641C24] text-white' : 'text-gray-600 hover:bg-gray-200'
               }`}
             >
               Orders ({orders.length})
             </button>
             <button
               onClick={() => setActiveTab('tables')}
-              className={`px-4 py-2 font-bold text-sm rounded-xl cursor-pointer transition-all ${
-                activeTab === 'tables' ? 'bg-[#641C24] text-white shadow-xs' : 'text-gray-600 hover:bg-gray-200'
+              className={`px-4 py-2 font-bold text-sm rounded-xl cursor-pointer ${
+                activeTab === 'tables' ? 'bg-[#641C24] text-white' : 'text-gray-600 hover:bg-gray-200'
               }`}
             >
               11 Tables View
             </button>
             <button
               onClick={() => setActiveTab('requests')}
-              className={`relative px-4 py-2 font-bold text-sm rounded-xl cursor-pointer transition-all ${
-                activeTab === 'requests' ? 'bg-[#641C24] text-white shadow-xs' : 'text-gray-600 hover:bg-gray-200'
+              className={`relative px-4 py-2 font-bold text-sm rounded-xl cursor-pointer ${
+                activeTab === 'requests' ? 'bg-[#641C24] text-white' : 'text-gray-600 hover:bg-gray-200'
               }`}
             >
               <span>Service Calls</span>
@@ -290,31 +202,27 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
             </button>
           </div>
 
-          <button 
+          <button
             onClick={fetchDashboardData}
-            className="flex items-center gap-1 text-xs text-gray-600 hover:text-black cursor-pointer bg-white border border-gray-300 px-3 py-1.5 rounded-lg"
+            className="flex items-center gap-1 text-xs text-gray-600 bg-white border border-gray-300 px-3 py-1.5 rounded-lg cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Refresh</span>
+            <span>Sync</span>
           </button>
         </div>
       </div>
 
-      {/* Content Area */}
+      {/* Content */}
       <main className="max-w-7xl mx-auto w-full px-4 sm:px-8 py-5 flex-1">
-        {/* ORDERS TAB */}
         {activeTab === 'orders' && (
-          <div>
-            {/* Status filters */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-4">
+          <div className="space-y-4">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
               {['ALL', 'RECEIVED', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'COMPLETED'].map(st => (
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer shrink-0 transition-colors ${
-                    statusFilter === st 
-                      ? 'bg-[#852D34] text-white' 
-                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer shrink-0 ${
+                    statusFilter === st ? 'bg-[#852D34] text-white' : 'bg-white text-gray-700 border border-gray-300'
                   }`}
                 >
                   {st}
@@ -322,315 +230,24 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
               ))}
             </div>
 
-            {/* Orders Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredOrders.map(order => {
-                const isNew = order.status === 'RECEIVED';
-                return (
-                  <div 
-                    key={order.id}
-                    className={`bg-white rounded-2xl p-4 border transition-all flex flex-col justify-between ${
-                      isNew 
-                        ? 'border-red-500 ring-2 ring-red-300 shadow-md animate-pulse-subtle' 
-                        : 'border-gray-200 shadow-xs'
-                    }`}
-                  >
-                    <div>
-                      {/* Card Header */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="bg-[#641C24] text-white text-xs font-bold px-2.5 py-1 rounded-lg">
-                            Table {order.table_number}
-                          </span>
-                          <span className="text-[10px] text-gray-500 font-mono">
-                            {order.order_number}
-                          </span>
-                        </div>
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                          order.status === 'RECEIVED' ? 'bg-red-100 text-red-800' :
-                          order.status === 'ACCEPTED' ? 'bg-blue-100 text-blue-800' :
-                          order.status === 'PREPARING' ? 'bg-amber-100 text-amber-800' :
-                          order.status === 'READY' ? 'bg-emerald-100 text-emerald-800' :
-                          order.status === 'SERVED' ? 'bg-purple-100 text-purple-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {order.status}
-                        </span>
-                      </div>
-
-                      {/* Customer info */}
-                      <p className="text-xs text-gray-600 mb-2">
-                        Guest: <strong className="text-gray-800">{order.customer_name}</strong> {order.customer_phone ? `(${order.customer_phone})` : ''}
-                      </p>
-
-                      {/* Items */}
-                      <div className="bg-[#FFF9F0] rounded-xl p-3 border border-[#C49A52]/20 mb-3 space-y-1.5 text-xs">
-                        {order.items.map(it => (
-                          <div key={it.id} className="flex justify-between items-start">
-                            <div>
-                              <span className="font-semibold text-gray-800">{it.item_name}</span>
-                              <span className="ml-1 text-gray-500 font-bold">× {it.quantity}</span>
-                              {it.customization && (
-                                <p className="text-[10px] text-amber-800 italic">{it.customization}</p>
-                              )}
-                            </div>
-                            <span className="font-bold text-gray-700">₹{it.total_price.toFixed(0)}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {order.special_instructions && (
-                        <p className="text-xs bg-amber-50 text-amber-900 p-2 rounded-lg mb-3 border border-amber-200">
-                          <strong>Note:</strong> {order.special_instructions}
-                        </p>
-                      )}
-
-                      <div className="flex justify-between items-baseline text-xs font-bold text-gray-800 mb-3">
-                        <span>Total Payable:</span>
-                        <span className="text-base text-[#641C24]">₹{order.final_amount.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    {/* Order Action Buttons */}
-                    <div className="pt-2 border-t border-gray-100 space-y-2">
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        {order.status === 'RECEIVED' && (
-                          <>
-                            <button
-                              onClick={() => handleUpdateOrderStatus(order.id, 'ACCEPTED')}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg cursor-pointer"
-                            >
-                              Accept Order
-                            </button>
-                            <button
-                              onClick={() => handleUpdateOrderStatus(order.id, 'CANCELLED')}
-                              className="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 rounded-lg cursor-pointer"
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
-
-                        {order.status !== 'CANCELLED' && (
-                          <div className="col-span-2 flex justify-end pb-1">
-                            <button
-                              onClick={() => {
-                                setPrintingKotOrder(order);
-                                printUrlViaIframe(`/api/orders/${order.id}/kot/html`);
-                              }}
-                              className="text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 px-2 py-1 rounded flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                              title="Print Kitchen Order Ticket"
-                            >
-                              <Printer className="w-3.5 h-3.5 text-[#641C24]" />
-                              <span>Print KOT Ticket</span>
-                            </button>
-                          </div>
-                        )}
-
-                        {order.status === 'ACCEPTED' && (
-                          <button
-                            onClick={() => handleUpdateOrderStatus(order.id, 'PREPARING')}
-                            className="col-span-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded-lg cursor-pointer flex items-center justify-center gap-1"
-                          >
-                            <ChefHat className="w-4 h-4" />
-                            <span>Mark Cooking (Preparing)</span>
-                          </button>
-                        )}
-
-                        {order.status === 'PREPARING' && (
-                          <button
-                            onClick={() => handleUpdateOrderStatus(order.id, 'READY')}
-                            className="col-span-2 bg-[#258451] hover:bg-emerald-800 text-white font-bold py-2 rounded-lg cursor-pointer flex items-center justify-center gap-1"
-                          >
-                            <Utensils className="w-4 h-4" />
-                            <span>Mark Food Ready</span>
-                          </button>
-                        )}
-
-                        {order.status === 'READY' && (
-                          <button
-                            onClick={() => handleUpdateOrderStatus(order.id, 'SERVED')}
-                            className="col-span-2 bg-purple-700 hover:bg-purple-800 text-white font-bold py-2 rounded-lg cursor-pointer flex items-center justify-center gap-1"
-                          >
-                            <CheckCheck className="w-4 h-4" />
-                            <span>Mark Served to Table</span>
-                          </button>
-                        )}
-
-                        {order.status === 'SERVED' && (
-                          <button
-                            onClick={() => setSelectedInvoiceOrder(order)}
-                            className="col-span-2 bg-[#641C24] hover:bg-[#852D34] text-white font-bold py-2 rounded-lg cursor-pointer flex items-center justify-center gap-1"
-                          >
-                            <FileText className="w-4 h-4 text-[#C49A52]" />
-                            <span>Generate Bill & GST Invoice</span>
-                          </button>
-                        )}
-
-                        {order.status === 'COMPLETED' && (
-                          <div className="col-span-2 flex items-center justify-between text-xs text-gray-500 pt-1">
-                            <span className="text-emerald-700 font-bold flex items-center gap-1">
-                              <CheckCheck className="w-3.5 h-3.5" />
-                              <span>Paid & Closed</span>
-                            </span>
-                            <button
-                              onClick={() => setReprintOrder(order)}
-                              className="text-[#641C24] hover:text-[#852D34] bg-amber-50 hover:bg-amber-100 border border-[#C49A52]/40 px-2.5 py-1 rounded font-bold cursor-pointer flex items-center gap-1 shadow-2xs transition-colors"
-                              title="Reprint Bill or Download Tax Invoice"
-                            >
-                              <Printer className="w-3.5 h-3.5 text-[#641C24]" />
-                              <span>Reprint Bill</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {filteredOrders.map(order => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  onUpdateStatus={handleUpdateOrderStatus}
+                  onOpenBillModal={o => setSelectedBillOrder(o)}
+                  onReprintBill={o => printViaHiddenIframe(`/api/orders/${o.id}/receipt/html`)}
+                />
+              ))}
             </div>
           </div>
         )}
 
-        {/* 11 TABLES VIEW */}
         {activeTab === 'tables' && (
-          <div className="space-y-4">
-            <div className="bg-white p-4 rounded-2xl border border-[#C49A52]/40 shadow-sm flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="font-serif-royal font-bold text-base text-[#641C24]">
-                  Table Management & QR Stands (11 Tables)
-                </h3>
-                <p className="text-xs text-gray-600">
-                  Tables 01–05: AC Dining Hall • Tables 06–11: Non-AC Family Hall
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href="/api/tables/qr/print-all"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="bg-[#641C24] hover:bg-[#852D34] text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-                >
-                  <Printer className="w-4 h-4 text-[#C49A52]" />
-                  <span>🖨️ Print All Table QR Stands</span>
-                </a>
-                <a
-                  href="/api/tables/qr/pdf"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-                >
-                  <span>📄 Download PDF</span>
-                </a>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {tables.map(tbl => {
-              const statusColors = {
-                AVAILABLE: 'border-emerald-300 bg-emerald-50/50 text-emerald-900',
-                ORDERING: 'border-amber-300 bg-amber-50/50 text-amber-900',
-                PREPARING: 'border-orange-300 bg-orange-50/50 text-orange-900',
-                OCCUPIED: 'border-purple-300 bg-purple-50/50 text-purple-900',
-                RESERVED: 'border-blue-300 bg-blue-50/50 text-blue-900',
-                NEEDS_ATTENTION: 'border-red-400 bg-red-50 text-red-900',
-              }[tbl.status] || 'border-gray-200 bg-white text-gray-800';
-
-              return (
-                <div 
-                  key={tbl.id}
-                  className={`rounded-2xl p-4 border-2 transition-all flex flex-col justify-between ${statusColors}`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-serif-royal font-bold text-lg">{tbl.name}</h3>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border border-gray-300 uppercase">
-                        {tbl.section}
-                      </span>
-                    </div>
-
-                    <p className="text-xs mb-3 font-semibold">
-                      Status: <span className="underline">{tbl.status}</span>
-                    </p>
-                    <p className="text-[11px] text-gray-600 mb-2">Capacity: {tbl.capacity} Guests</p>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="pt-3 border-t border-black/10 space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <a
-                        href={`/menu?table=${tbl.table_number}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[#641C24] font-bold underline flex items-center gap-1"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> Open QR
-                      </a>
-                      <button
-                        onClick={() => {
-                          const newSt = tbl.status === 'AVAILABLE' ? 'OCCUPIED' : 'AVAILABLE';
-                          fetch(`/api/tables/${tbl.id}/status`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ status: newSt })
-                          }).then(() => fetchDashboardData());
-                        }}
-                        className="px-2 py-1 rounded bg-white font-bold border border-gray-300 text-[11px] cursor-pointer"
-                      >
-                        Toggle Status
-                      </button>
-                    </div>
-
-                    {tbl.status !== 'AVAILABLE' && (
-                      <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-black/5">
-                        <button
-                          onClick={async () => {
-                            const dest = prompt(`Shift active dining orders from Table ${tbl.table_number} to which Table (e.g. 02, 06)?`);
-                            if (dest) {
-                              const res = await fetch('/api/tables/shift', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ from_table: tbl.table_number, to_table: dest })
-                              });
-                              const data = await res.json();
-                              alert(data.message || data.error);
-                              fetchDashboardData();
-                            }
-                          }}
-                          className="bg-white/90 hover:bg-white text-gray-800 border border-gray-300 py-1 rounded font-bold text-[10px] cursor-pointer"
-                        >
-                          ⇄ Shift Table
-                        </button>
-
-                        <button
-                          onClick={async () => {
-                            const sec = prompt(`Merge another table into Table ${tbl.table_number} (e.g. enter table number to merge from):`);
-                            if (sec) {
-                              const res = await fetch('/api/tables/merge', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ primary_table: tbl.table_number, secondary_table: sec })
-                              });
-                              const data = await res.json();
-                              alert(data.message || data.error);
-                              fetchDashboardData();
-                            }
-                          }}
-                          className="bg-white/90 hover:bg-white text-gray-800 border border-gray-300 py-1 rounded font-bold text-[10px] cursor-pointer"
-                        >
-                          ⇥ Merge Table
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            </div>
-          </div>
+          <TableGrid tables={tables} onRefresh={fetchDashboardData} />
         )}
 
-        {/* SERVICE REQUESTS TAB */}
         {activeTab === 'requests' && (
           <div className="space-y-3">
             {serviceRequests.length === 0 ? (
@@ -639,27 +256,19 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
               </div>
             ) : (
               serviceRequests.map(req => (
-                <div 
-                  key={req.id}
-                  className="bg-white rounded-2xl p-4 border-l-4 border-l-red-600 border border-gray-200 shadow-sm flex items-center justify-between"
-                >
+                <div key={req.id} className="bg-white rounded-2xl p-4 border-l-4 border-l-red-600 border border-gray-200 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold">
-                      <Bell className="w-5 h-5 animate-bounce" />
-                    </div>
+                    <Bell className="w-5 h-5 text-red-600 animate-bounce" />
                     <div>
-                      <h4 className="font-bold text-sm text-gray-900">
-                        {req.table_name} — {req.request_type.replace('_', ' ')}
-                      </h4>
+                      <h4 className="font-bold text-sm text-gray-900">{req.table_name} — {req.request_type.replace('_', ' ')}</h4>
                       <p className="text-xs text-gray-500">Requested at {req.created_at}</p>
                     </div>
                   </div>
-
                   <button
                     onClick={() => handleResolveServiceRequest(req.id)}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl cursor-pointer"
                   >
-                    Acknowledge & Clear
+                    Clear
                   </button>
                 </div>
               ))
@@ -668,301 +277,20 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
         )}
       </main>
 
-      {/* INVOICE & BILL GENERATION MODAL */}
-      {selectedInvoiceOrder && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#C49A52]/40 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-              <h3 className="font-serif-royal font-bold text-lg text-[#641C24]">
-                Generate Bill: Table {selectedInvoiceOrder.table_number}
-              </h3>
-              <button 
-                onClick={() => setSelectedInvoiceOrder(null)}
-                className="text-gray-400 hover:text-black font-bold"
-              >
-                ✕
-              </button>
-            </div>
+      {/* Modals */}
+      <ManualOrderModal
+        isOpen={isManualOrderOpen}
+        onClose={() => setIsManualOrderOpen(false)}
+        onSuccess={fetchDashboardData}
+        menuItems={menuItems}
+      />
 
-            <div className="bg-[#FFF9F0] p-3 rounded-xl border border-[#C49A52]/30 space-y-1 text-xs">
-              <div className="flex justify-between">
-                <span>Items Subtotal:</span>
-                <span className="font-semibold">₹{selectedInvoiceOrder.subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>CGST (2.5%):</span>
-                <span>₹{selectedInvoiceOrder.cgst_amount.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>SGST (2.5%):</span>
-                <span>₹{selectedInvoiceOrder.sgst_amount.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-sm pt-1 border-t border-[#C49A52]/30 text-[#641C24]">
-                <span>Total Amount:</span>
-                <span>₹{selectedInvoiceOrder.final_amount.toFixed(2)}</span>
-              </div>
-            </div>
-
-            {/* Discount input */}
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">
-                Authorized Discount (₹)
-              </label>
-              <input 
-                type="number"
-                min="0"
-                value={discountAmount}
-                onChange={(e) => setDiscountAmount(Number(e.target.value))}
-                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#641C24]"
-                placeholder="0"
-              />
-            </div>
-
-            {/* Payment Received at Counter */}
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">
-                Payment Collected at Counter:
-              </label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#641C24] font-medium"
-              >
-                <option value="CASH">Counter Cash</option>
-                <option value="UPI">Counter GPay / UPI QR Stand</option>
-                <option value="CARD">Counter Card POS Machine</option>
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <button
-                onClick={handleGenerateInvoice}
-                disabled={isGeneratingBill}
-                className="w-full bg-[#641C24] hover:bg-[#852D34] text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer shadow-md"
-              >
-                <Printer className="w-4 h-4 text-[#C49A52]" />
-                <span>A4 Tax Invoice (PDF)</span>
-              </button>
-
-              <button
-                onClick={async () => {
-                  if (!selectedInvoiceOrder) return;
-                  setIsGeneratingBill(true);
-                  try {
-                    const res = await fetch('/api/invoices', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        order_id: selectedInvoiceOrder.id,
-                        discount_amount: discountAmount,
-                        payment_method: paymentMethod,
-                        payment_status: 'PAID'
-                      })
-                    });
-                    const data = await res.json();
-                    if (res.ok) {
-                      printUrlViaIframe(`/api/invoices/${data.invoice_id}/receipt/html`);
-                      setSelectedInvoiceOrder(null);
-                      fetchDashboardData();
-                    }
-                  } catch (e) {
-                    console.error(e);
-                  } finally {
-                    setIsGeneratingBill(false);
-                  }
-                }}
-                disabled={isGeneratingBill}
-                className="w-full bg-[#258451] hover:bg-emerald-800 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer shadow-md"
-              >
-                <Printer className="w-4 h-4 text-emerald-200" />
-                <span>1-Click 80mm Thermal Bill</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* REPRINT BILL MODAL (PAID & CLOSED ORDERS) */}
-      {reprintOrder && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#C49A52]/40 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-              <div>
-                <h3 className="font-serif-royal font-bold text-lg text-[#641C24]">
-                  Reprint Bill: Table {reprintOrder.table_number}
-                </h3>
-                <p className="text-[11px] text-gray-500 font-mono">
-                  Order #{reprintOrder.order_number} {reprintOrder.invoice_number ? `• ${reprintOrder.invoice_number}` : ''}
-                </p>
-              </div>
-              <button 
-                onClick={() => setReprintOrder(null)}
-                className="text-gray-400 hover:text-black font-bold p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-emerald-800 uppercase block">Settlement Status</span>
-                <span className="text-xs text-emerald-700">Payment: {reprintOrder.payment_method} ({reprintOrder.payment_status})</span>
-              </div>
-              <span className="text-xs font-bold bg-emerald-600 text-white px-2.5 py-1 rounded-full flex items-center gap-1">
-                <CheckCheck className="w-3.5 h-3.5" />
-                <span>Paid & Closed</span>
-              </span>
-            </div>
-
-            {/* Bill Summary */}
-            <div className="bg-[#FFF9F0] p-3.5 rounded-xl border border-[#C49A52]/30 space-y-1.5 text-xs">
-              <div className="space-y-1 max-h-36 overflow-y-auto pr-1 border-b border-gray-200 pb-2">
-                {reprintOrder.items?.map(it => (
-                  <div key={it.id} className="flex justify-between text-gray-700">
-                    <span>{it.quantity}× {it.item_name}</span>
-                    <span className="font-medium">₹{it.total_price.toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-between pt-1">
-                <span>Items Subtotal:</span>
-                <span className="font-semibold">₹{reprintOrder.subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>CGST (2.5%):</span>
-                <span>₹{reprintOrder.cgst_amount.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>SGST (2.5%):</span>
-                <span>₹{reprintOrder.sgst_amount.toFixed(2)}</span>
-              </div>
-              {reprintOrder.discount_amount && reprintOrder.discount_amount > 0 ? (
-                <div className="flex justify-between text-emerald-700 font-semibold">
-                  <span>Discount:</span>
-                  <span>- ₹{reprintOrder.discount_amount.toFixed(2)}</span>
-                </div>
-              ) : null}
-              <div className="flex justify-between font-bold text-base pt-1.5 border-t border-[#C49A52]/40 text-[#641C24]">
-                <span>Total Paid:</span>
-                <span>₹{reprintOrder.final_amount.toFixed(2)}</span>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                onClick={() => {
-                  printUrlViaIframe(`/api/orders/${reprintOrder.id}/receipt/html`);
-                }}
-                className="w-full bg-[#258451] hover:bg-emerald-800 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
-              >
-                <Printer className="w-4 h-4 text-emerald-200" />
-                <span>Print 80mm Thermal Bill</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  window.open(`/api/orders/${reprintOrder.id}/invoice/pdf?format=A4`, '_blank');
-                }}
-                className="w-full bg-[#641C24] hover:bg-[#852D34] text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
-              >
-                <Printer className="w-4 h-4 text-[#C49A52]" />
-                <span>A4 Tax Invoice (PDF)</span>
-              </button>
-            </div>
-            <div className="flex justify-center">
-              <a
-                href={`/api/orders/${reprintOrder.id}/receipt/html`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] text-gray-500 hover:text-gray-800 underline flex items-center gap-1 cursor-pointer"
-              >
-                <span>↗ Open in new browser tab</span>
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* KOT PREVIEW MODAL */}
-      {printingKotOrder && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-[#C49A52]/40 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-              <div>
-                <h3 className="font-serif-royal font-bold text-lg text-[#641C24]">
-                  KOT: Table {printingKotOrder.table_number}
-                </h3>
-                <p className="text-[11px] text-gray-500 font-mono">
-                  {printingKotOrder.order_number} • {printingKotOrder.section}
-                </p>
-              </div>
-              <button 
-                onClick={() => setPrintingKotOrder(null)}
-                className="text-gray-400 hover:text-black font-bold p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="bg-amber-50/70 border border-amber-300 rounded-xl p-3.5 font-mono text-xs space-y-2 text-gray-900">
-              <div className="text-center font-bold text-sm border-b border-dashed border-gray-400 pb-1 text-[#641C24]">
-                KITCHEN ORDER TICKET (KOT)
-              </div>
-              <div className="text-[11px] text-gray-600 flex justify-between">
-                <span>Guest: {printingKotOrder.customer_name || 'Walk-in'}</span>
-                <span>{new Date(printingKotOrder.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
-              {printingKotOrder.special_instructions && (
-                <div className="bg-amber-100 p-1.5 rounded text-[11px] font-sans text-amber-900 border border-amber-300">
-                  <strong>Note:</strong> {printingKotOrder.special_instructions}
-                </div>
-              )}
-              <div className="border-t border-dashed border-gray-400 pt-2 space-y-1.5 max-h-48 overflow-y-auto">
-                {printingKotOrder.items?.map(it => (
-                  <div key={it.id} className="flex items-start justify-between">
-                    <div>
-                      <span className="font-bold text-sm">{it.quantity}×</span>{' '}
-                      <span className="font-bold">{it.item_name}</span>
-                      {it.customization && (
-                        <div className="text-[10px] text-gray-600 italic ml-4">
-                          ↳ {it.customization}
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-[10px] uppercase font-bold text-gray-500 ml-1">
-                      {it.is_veg ? '[VEG]' : '[NON-VEG]'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="border-t border-dashed border-gray-400 pt-1.5 text-center font-bold text-xs">
-                Total Items: {printingKotOrder.items?.reduce((sum, it) => sum + it.quantity, 0) || 0}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                onClick={() => {
-                  printUrlViaIframe(`/api/orders/${printingKotOrder.id}/kot/html`);
-                }}
-                className="w-full bg-[#641C24] hover:bg-[#852D34] text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer shadow-md"
-              >
-                <Printer className="w-3.5 h-3.5 text-[#C49A52]" />
-                <span>Print Ticket</span>
-              </button>
-              <button
-                onClick={() => {
-                  window.open(`/api/orders/${printingKotOrder.id}/kot/html`, '_blank');
-                }}
-                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer border border-gray-300"
-              >
-                <span>Open in Tab</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BillModal
+        order={selectedBillOrder}
+        isOpen={!!selectedBillOrder}
+        onClose={() => setSelectedBillOrder(null)}
+        onSuccess={fetchDashboardData}
+      />
     </div>
   );
 };
