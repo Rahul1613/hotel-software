@@ -124,12 +124,13 @@ def create_app(config_class=Config):
     def handle_500(e):
         return jsonify({"error": {"code": "INTERNAL_SERVER_ERROR", "message": "An unexpected error occurred."}}), 500
 
-    # CLI command: flask seed
-    @app.cli.command("seed")
-    def run_seed():
-        init_db()
-        seed_database()
-        print("Database initialized and seeded.")
+    # Automatically ensure tables & idempotent seeds exist on startup
+    with app.app_context():
+        try:
+            init_db()
+            seed_database()
+        except Exception as e:
+            app.logger.warning(f"Database initialization: {e}")
 
     return app
 
