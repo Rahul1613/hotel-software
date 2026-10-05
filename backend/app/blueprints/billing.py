@@ -247,6 +247,89 @@ def generate_invoice():
     finally:
         db.close()
 
+@billing_bp.route('/invoices/<int:invoice_id>', methods=['PUT', 'PATCH'])
+@require_auth
+def update_invoice(invoice_id):
+    """
+    Update invoice details (payment method, discount, customer name).
+    Allows changing bills, updating discounts, and modifying payment modes.
+    """
+    data = request.json or {}
+    db = SessionLocal()
+    try:
+        inv = db.get(Invoice, invoice_id)
+        if not inv:
+            return jsonify({"error": {"code": "NOT_FOUND", "message": "Invoice not found."}}), 404
+
+        if "payment_method" in data:
+            inv.payment_method = str(data["payment_method"]).upper().strip()
+        if "customer_name" in data:
+            inv.customer_name = str(data["customer_name"]).strip()
+        if "customer_gstin" in data:
+            inv.customer_gstin = str(data["customer_gstin"]).strip() or None
+        if "discount_amount" in data:
+            discount_val = float(data["discount_amount"])
+            discount_paise = rupees_to_paise(discount_val)
+            rest = db.query(Restaurant).first()
+            cgst_rate = rest.cgst_rate if rest else 2.5
+            sgst_rate = rest.sgst_rate if rest else 2.5
+            sc_rate = rest.service_charge_rate if (rest and rest.service_charge_enabled) else 0.0
+
+            # Cashier limit check
+            user_role = g.current_user.role.lower()
+            cashier_limit = rest.discount_limit_cashier if rest else 10000
+            if user_role == "cashier" and discount_paise > cashier_limit:
+                return jsonify({
+                    "error": {
+                        "code": "DISCOUNT_LIMIT_EXCEEDED",
+                        "message": f"Cashiers can only authorize discounts up to {format_inr(cashier_limit)}. Manager approval required."
+                    }
+                }), 403
+
+            gst = calculate_gst_breakdown(
+                subtotal_paise=inv.subtotal,
+                discount_paise=discount_paise,
+                cgst_rate=cgst_rate,
+                sgst_rate=sgst_rate,
+                service_charge_rate=sc_rate
+            )
+            inv.discount_amount = gst["discount_paise"]
+            inv.taxable_amount = gst["taxable_paise"]
+            inv.cgst_amount = gst["cgst_paise"]
+            inv.sgst_amount = gst["sgst_paise"]
+            inv.round_off = gst["round_off_paise"]
+            inv.final_payable = gst["final_payable_paise"]
+
+        db.add(AuditLog(
+            user_id=g.current_user.id,
+            action="INVOICE_UPDATED",
+            entity_type="Invoice",
+            entity_id=str(inv.id),
+            new_value={
+                "invoice_number": inv.invoice_number,
+                "payment_method": inv.payment_method,
+                "discount_amount_paise": inv.discount_amount,
+                "final_payable_paise": inv.final_payable
+            }
+        ))
+        db.commit()
+        db.refresh(inv)
+
+        return jsonify({
+            "message": "Invoice updated successfully.",
+            "invoice_id": inv.id,
+            "invoice_number": inv.invoice_number,
+            "subtotal": paise_to_rupees(inv.subtotal),
+            "discount_amount": paise_to_rupees(inv.discount_amount),
+            "cgst_amount": paise_to_rupees(inv.cgst_amount),
+            "sgst_amount": paise_to_rupees(inv.sgst_amount),
+            "final_payable": paise_to_rupees(inv.final_payable),
+            "payment_method": inv.payment_method,
+            "customer_name": inv.customer_name
+        })
+    finally:
+        db.close()
+
 @billing_bp.route('/invoices/<int:invoice_id>/cancel', methods=['POST'])
 @require_role("owner", "manager")
 def cancel_invoice_and_issue_credit_note(invoice_id):

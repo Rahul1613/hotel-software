@@ -88,18 +88,28 @@ def decode_order_token(token: str) -> dict:
         return None
 
 def get_current_user():
-    """Extract and authenticate staff user from Authorization: Bearer <token>"""
+    """Extract and authenticate staff user from Authorization header, query param, or cookie."""
+    token = None
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+    elif request.args.get("token"):
+        token = request.args.get("token").strip()
+    elif request.cookies.get("token"):
+        token = request.cookies.get("token").strip()
+
+    if not token:
         return None
-    token = auth_header.split(" ", 1)[1].strip()
     payload = decode_staff_jwt(token)
     if not payload:
         return None
     
     db = SessionLocal()
-    user = db.query(User).filter(User.id == payload.get("user_id"), User.is_active == True).first()
-    return user
+    try:
+        user = db.query(User).filter(User.id == payload.get("user_id"), User.is_active == True).first()
+        return user
+    finally:
+        db.close()
 
 def require_auth(f):
     """Decorator ensuring valid staff JWT is present."""
