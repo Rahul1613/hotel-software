@@ -237,7 +237,7 @@ export const StaffDashboard: React.FC = () => {
                   order={order}
                   onUpdateStatus={handleUpdateOrderStatus}
                   onOpenBillModal={o => setSelectedBillOrder(o)}
-                  onReprintBill={o => printViaHiddenIframe(`/api/orders/${o.id}/receipt/html`)}
+                  onReprintBill={o => setSelectedBillOrder(o)}
                 />
               ))}
             </div>

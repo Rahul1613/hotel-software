@@ -80,3 +80,28 @@ def test_single_session_billing_multiple_orders(client):
     bill_data = res_bill.get_json()
     assert 'invoice_number' in bill_data
     assert bill_data['invoice_number'].startswith('EK/26-27/')
+
+    inv_id = bill_data['invoice_id']
+
+    # Test PDF download for invoice
+    res_pdf = client.get(f'/api/invoices/{inv_id}/pdf?format=A4')
+    assert res_pdf.status_code == 200
+    assert res_pdf.mimetype == 'application/pdf'
+    assert len(res_pdf.data) > 1000
+
+    # Test Thermal HTML receipt
+    res_html = client.get(f'/api/invoices/{inv_id}/receipt/html')
+    assert res_html.status_code == 200
+    assert b'Hotel Ekdant' in res_html.data
+    assert b'TOTAL PAYABLE' in res_html.data
+
+    # Test Order receipt endpoint
+    res_ord_receipt = client.get(f'/api/orders/{ord1_id}/receipt/html')
+    assert res_ord_receipt.status_code == 200
+    assert b'Hotel Ekdant' in res_ord_receipt.data
+
+    # Test Order PDF endpoint
+    res_ord_pdf = client.get(f'/api/orders/{ord1_id}/pdf?format=A4')
+    assert res_ord_pdf.status_code == 200
+    assert res_ord_pdf.mimetype == 'application/pdf'
+    assert len(res_ord_pdf.data) > 1000

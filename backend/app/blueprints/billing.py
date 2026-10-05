@@ -307,26 +307,53 @@ def cancel_invoice_and_issue_credit_note(invoice_id):
     finally:
         db.close()
 
+def _get_invoice_orders(inv, db):
+    """Return all non-cancelled orders for an invoice, resolving via session or table."""
+    if inv.session_id:
+        session = db.get(TableSession, inv.session_id)
+        if session and session.orders:
+            active = [o for o in session.orders if o.status != "CANCELLED"]
+            if active:
+                return active
+        # Fallback direct query on Order table
+        sess_orders = db.query(Order).filter(Order.session_id == inv.session_id, Order.status != "CANCELLED").all()
+        if sess_orders:
+            return sess_orders
+    if inv.table_id:
+        table = db.get(RestaurantTable, inv.table_id)
+        if table and table.orders:
+            return [o for o in table.orders if o.status != "CANCELLED"]
+    return []
+
+
 # --- PRINTING ENDPOINTS ---
 
 @billing_bp.route('/invoices/<int:invoice_id>/pdf', methods=['GET'])
 def download_invoice_pdf_view(invoice_id):
     """Download ReportLab PDF invoice (A4 or thermal)."""
     fmt = request.args.get('format', 'A4')
+    as_attachment = request.args.get('download', '0') == '1'
     db = SessionLocal()
     try:
         inv = db.get(Invoice, invoice_id)
         if not inv:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Invoice not found."}}), 404
 
-        orders = inv.table.orders if inv.table else []
+        orders = _get_invoice_orders(inv, db)
         rest = db.query(Restaurant).first()
         pdf_bytes = generate_invoice_pdf(inv, orders, rest, format_type=fmt)
+
+        safe_filename = inv.invoice_number.replace('/', '_') + f"_{fmt}.pdf"
+        disp_type = 'attachment' if as_attachment else 'inline'
 
         return Response(
             pdf_bytes,
             mimetype='application/pdf',
-            headers={'Content-Disposition': f'inline; filename={inv.invoice_number}_{fmt}.pdf'}
+            headers={
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': f'{disp_type}; filename="{safe_filename}"',
+                'Content-Length': str(len(pdf_bytes))
+            }
         )
     finally:
         db.close()
@@ -340,7 +367,7 @@ def print_thermal_receipt_html_view(invoice_id):
         if not inv:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Invoice not found."}}), 404
 
-        orders = inv.table.orders if inv.table else []
+        orders = _get_invoice_orders(inv, db)
         rest = db.query(Restaurant).first()
         html = generate_thermal_receipt_html(inv, orders, rest)
         return Response(html, mimetype='text/html; charset=utf-8')
@@ -367,18 +394,6 @@ def print_kot_html_view(order_id):
 # ===========================================================================
 # DUAL BILLING — NEW ENDPOINTS
 # ===========================================================================
-
-def _get_invoice_orders(inv, db):
-    """Return all non-cancelled orders for an invoice, resolving via session."""
-    if inv.session_id:
-        session = db.get(TableSession, inv.session_id)
-        if session:
-            return [o for o in session.orders if o.status != "CANCELLED"]
-    if inv.table_id:
-        table = db.get(RestaurantTable, inv.table_id)
-        if table:
-            return [o for o in table.orders if o.status != "CANCELLED"]
-    return []
 
 
 @billing_bp.route('/invoices/<int:invoice_id>/internal', methods=['GET'])

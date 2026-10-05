@@ -21,9 +21,9 @@ def generate_invoice_pdf(invoice, orders, restaurant, format_type='A4') -> bytes
         page_width = 80 * mm
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=(page_width, 220 * mm),
-            leftMargin=4 * mm,
-            rightMargin=4 * mm,
+            pagesize=(page_width, 240 * mm),
+            leftMargin=3 * mm,
+            rightMargin=3 * mm,
             topMargin=4 * mm,
             bottomMargin=4 * mm
         )
@@ -32,10 +32,10 @@ def generate_invoice_pdf(invoice, orders, restaurant, format_type='A4') -> bytes
         doc = SimpleDocTemplate(
             buffer,
             pagesize=A4,
-            leftMargin=15 * mm,
-            rightMargin=15 * mm,
-            topMargin=15 * mm,
-            bottomMargin=15 * mm
+            leftMargin=12 * mm,
+            rightMargin=12 * mm,
+            topMargin=12 * mm,
+            bottomMargin=12 * mm
         )
 
     styles = getSampleStyleSheet()
@@ -43,31 +43,33 @@ def generate_invoice_pdf(invoice, orders, restaurant, format_type='A4') -> bytes
         'InvoiceTitle',
         parent=styles['Heading1'],
         fontName='Helvetica-Bold',
-        fontSize=16 if format_type == 'A4' else 12,
+        fontSize=15 if format_type == 'A4' else 11,
         textColor=colors.HexColor('#641C24'),
         alignment=1, # Center
-        spaceAfter=4
+        spaceAfter=2
     )
     subtitle_style = ParagraphStyle(
         'InvoiceSubtitle',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=9 if format_type == 'A4' else 7.5,
+        fontSize=8.5 if format_type == 'A4' else 7,
         alignment=1,
         textColor=colors.HexColor('#444444'),
-        spaceAfter=8
+        spaceAfter=4
     )
     body_style = ParagraphStyle(
         'InvoiceBody',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=9 if format_type == 'A4' else 8,
+        fontSize=8.5 if format_type == 'A4' else 7.5,
         textColor=colors.HexColor('#222222')
     )
-    bold_style = ParagraphStyle(
-        'InvoiceBold',
-        parent=body_style,
-        fontName='Helvetica-Bold'
+    item_title_style = ParagraphStyle(
+        'ItemTitle',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8.5 if format_type == 'A4' else 7.5,
+        textColor=colors.HexColor('#222222')
     )
 
     elements = []
@@ -78,88 +80,112 @@ def generate_invoice_pdf(invoice, orders, restaurant, format_type='A4') -> bytes
     elements.append(Paragraph(f"<b>{rest_name}</b>", title_style))
     elements.append(Paragraph(rest_tagline, subtitle_style))
     
-    addr = f"{restaurant.address}<br/>Phone: {restaurant.phone} | GSTIN: {restaurant.gstin} | FSSAI: {restaurant.fssai}"
-    elements.append(Paragraph(addr, subtitle_style))
-    elements.append(Spacer(1, 8))
+    addr = f"{restaurant.address}<br/>Phone: {restaurant.phone} | GSTIN: {restaurant.gstin} | FSSAI: {restaurant.fssai}" if restaurant else ""
+    if addr:
+        elements.append(Paragraph(addr, subtitle_style))
+    elements.append(Spacer(1, 6))
 
     # Bill Metadata
     dt_str = invoice.created_at.strftime("%d-%b-%Y %I:%M %p") if invoice.created_at else ""
-    tbl_num = invoice.table.table_number if invoice.table else "Takeaway"
+    tbl_num = invoice.table.table_number if (invoice.table and hasattr(invoice.table, 'table_number')) else "Takeaway"
     
     meta_data = [
         [Paragraph(f"<b>Invoice No:</b> {invoice.invoice_number}", body_style), Paragraph(f"<b>Date:</b> {dt_str}", body_style)],
         [Paragraph(f"<b>Table:</b> {tbl_num}", body_style), Paragraph(f"<b>HSN/SAC:</b> {invoice.hsn_sac or '9963'}", body_style)],
         [Paragraph(f"<b>Customer:</b> {escape(invoice.customer_name or 'Guest')}", body_style), Paragraph(f"<b>Payment:</b> {invoice.payment_method} ({invoice.payment_status})", body_style)],
     ]
-    if invoice.customer_gstin:
+    if getattr(invoice, 'customer_gstin', None):
         meta_data.append([Paragraph(f"<b>Cust GSTIN:</b> {invoice.customer_gstin}", body_style), Paragraph("", body_style)])
 
-    col_w = [85 * mm, 85 * mm] if format_type == 'A4' else [36 * mm, 36 * mm]
+    col_w = [90 * mm, 90 * mm] if format_type == 'A4' else [37 * mm, 37 * mm]
     meta_table = Table(meta_data, colWidths=col_w)
     meta_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
     ]))
     elements.append(meta_table)
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 8))
 
     # Itemized Table
-    item_rows = [["Item Description", "Qty", "Rate (₹)", "Total (₹)"]]
+    item_rows = [["#", "Item Description", "Qty", "Rate (Rs.)", "Amount (Rs.)"]]
+    idx = 1
+    found_items = False
     for order in orders:
         for it in order.items:
             if it.item_status != "CANCELLED":
+                found_items = True
                 item_rows.append([
-                    it.item_name,
+                    str(idx),
+                    Paragraph(escape(it.item_name), item_title_style),
                     str(it.quantity),
                     f"{paise_to_rupees(it.price):.2f}",
                     f"{paise_to_rupees(it.total_price):.2f}"
                 ])
+                idx += 1
 
-    table_col_w = [90 * mm, 20 * mm, 30 * mm, 30 * mm] if format_type == 'A4' else [34 * mm, 10 * mm, 14 * mm, 14 * mm]
+    if not found_items:
+        # Fallback to prevent blank item table if orders were empty
+        item_rows.append(["1", Paragraph("Food & Dining Services", item_title_style), "1", f"{paise_to_rupees(invoice.subtotal):.2f}", f"{paise_to_rupees(invoice.subtotal):.2f}"])
+
+    if format_type == 'A4':
+        table_col_w = [12 * mm, 95 * mm, 20 * mm, 28 * mm, 30 * mm]
+    else:
+        table_col_w = [6 * mm, 34 * mm, 8 * mm, 13 * mm, 13 * mm]
+
     items_table = Table(item_rows, colWidths=table_col_w)
     items_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#641C24')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8 if format_type == 'thermal' else 9),
-        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('FONTSIZE', (0, 0), (-1, -1), 7.5 if format_type == 'thermal' else 8.5),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+        ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
         ('LINEBELOW', (0, -1), (-1, -1), 1, colors.HexColor('#641C24')),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E5E7EB')),
     ]))
     elements.append(items_table)
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 6))
 
     # Summary Table
     summary_data = [
-        ["Subtotal:", format_inr(invoice.subtotal)],
+        ["Subtotal:", f"Rs. {paise_to_rupees(invoice.subtotal):.2f}"],
     ]
     if invoice.discount_amount > 0:
-        summary_data.append(["Discount:", f"- {format_inr(invoice.discount_amount)}"])
-    summary_data.append([f"CGST ({invoice.cgst_rate}%):", format_inr(invoice.cgst_amount)])
-    summary_data.append([f"SGST ({invoice.sgst_rate}%):", format_inr(invoice.sgst_amount)])
-    if invoice.service_charge_amount > 0:
-        summary_data.append(["Service Charge:", format_inr(invoice.service_charge_amount)])
+        summary_data.append(["Discount Applied:", f"- Rs. {paise_to_rupees(invoice.discount_amount):.2f}"])
+    summary_data.append([f"CGST ({invoice.cgst_rate}%):", f"Rs. {paise_to_rupees(invoice.cgst_amount):.2f}"])
+    summary_data.append([f"SGST ({invoice.sgst_rate}%):", f"Rs. {paise_to_rupees(invoice.sgst_amount):.2f}"])
+    if getattr(invoice, 'service_charge_amount', 0) > 0:
+        summary_data.append(["Service Charge:", f"Rs. {paise_to_rupees(invoice.service_charge_amount):.2f}"])
     if invoice.round_off != 0:
-        summary_data.append(["Round Off:", format_inr(invoice.round_off)])
-    summary_data.append(["FINAL PAYABLE:", format_inr(invoice.final_payable)])
+        summary_data.append(["Round Off:", f"Rs. {paise_to_rupees(invoice.round_off):.2f}"])
+    summary_data.append(["TOTAL PAYABLE:", f"Rs. {paise_to_rupees(invoice.final_payable):.2f}"])
 
-    sum_col_w = [140 * mm, 30 * mm] if format_type == 'A4' else [44 * mm, 28 * mm]
+    sum_col_w = [140 * mm, 45 * mm] if format_type == 'A4' else [42 * mm, 32 * mm]
     sum_table = Table(summary_data, colWidths=sum_col_w)
     sum_table.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, -2), 'Helvetica'),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, -1), (-1, -1), 10 if format_type == 'A4' else 9),
+        ('FONTSIZE', (0, 0), (-1, -2), 8.5 if format_type == 'A4' else 7.5),
+        ('FONTSIZE', (0, -1), (-1, -1), 10 if format_type == 'A4' else 8.5),
+        ('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#641C24')),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#FFF9F0')),
         ('LINEABOVE', (0, -1), (-1, -1), 1, colors.HexColor('#641C24')),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+        ('TOPPADDING', (0, 0), (-1, -1), 2.5),
     ]))
     elements.append(sum_table)
 
     # UPI QR Code
     if restaurant and restaurant.upi_id and invoice.final_payable > 0:
-        elements.append(Spacer(1, 10))
+        elements.append(Spacer(1, 8))
         rupees_val = paise_to_rupees(invoice.final_payable)
-        upi_string = f"upi://pay?pa={restaurant.upi_id}&pn={urllib.parse.quote(restaurant.name)}&am={rupees_val:.2f}&tr={invoice.invoice_number}&cu=INR"
+        upi_string = f"upi://pay?pa={restaurant.upi_id}&pn={urllib.parse.quote(restaurant.name)}&am={rupees_val:.2f}&tr={invoice.invoice_number.replace('/', '_')}&cu=INR"
         qr = qrcode.QRCode(box_size=3, border=1)
         qr.add_data(upi_string)
         qr.make(fit=True)
@@ -167,8 +193,14 @@ def generate_invoice_pdf(invoice, orders, restaurant, format_type='A4') -> bytes
         qr_buf = io.BytesIO()
         qr_img.save(qr_buf, format='PNG')
         qr_buf.seek(0)
-        elements.append(RLImage(qr_buf, width=25 * mm, height=25 * mm))
+        qr_size = 24 * mm if format_type == 'A4' else 20 * mm
+        elements.append(RLImage(qr_buf, width=qr_size, height=qr_size))
         elements.append(Paragraph(f"Scan & Pay via any UPI App • {restaurant.upi_id}", subtitle_style))
+
+    # Footer note
+    elements.append(Spacer(1, 6))
+    elements.append(Paragraph("<b>Thank you for dining with Hotel Ekdant! Please visit again.</b>", subtitle_style))
+    elements.append(Paragraph("This is a computer-generated GST tax invoice.", subtitle_style))
 
     doc.build(elements)
     buffer.seek(0)
@@ -177,25 +209,38 @@ def generate_invoice_pdf(invoice, orders, restaurant, format_type='A4') -> bytes
 def generate_thermal_receipt_html(invoice, orders, restaurant) -> str:
     """Generate 80mm ESC/POS browser printable thermal HTML receipt with UPI QR."""
     dt_str = invoice.created_at.strftime("%d-%b-%Y %I:%M %p") if invoice.created_at else ""
-    tbl_num = invoice.table.table_number if invoice.table else "Takeaway"
+    tbl_num = invoice.table.table_number if (invoice.table and hasattr(invoice.table, 'table_number')) else "Takeaway"
     
     rows_html = ""
+    found_items = False
     for o in orders:
         for it in o.items:
             if it.item_status != "CANCELLED":
+                found_items = True
                 rows_html += f"""
                 <tr>
-                    <td style="text-align:left;">{escape(it.item_name)}</td>
+                    <td style="text-align:left; word-break:break-word;">{escape(it.item_name)}</td>
                     <td style="text-align:center;">{it.quantity}</td>
                     <td style="text-align:right;">{paise_to_rupees(it.price):.2f}</td>
                     <td style="text-align:right;">{paise_to_rupees(it.total_price):.2f}</td>
                 </tr>
                 """
 
+    if not found_items:
+        rows_html = f"""
+        <tr>
+            <td style="text-align:left;">Food & Dining Services</td>
+            <td style="text-align:center;">1</td>
+            <td style="text-align:right;">{paise_to_rupees(invoice.subtotal):.2f}</td>
+            <td style="text-align:right;">{paise_to_rupees(invoice.subtotal):.2f}</td>
+        </tr>
+        """
+
     upi_qr_html = ""
     if restaurant and restaurant.upi_id and invoice.final_payable > 0:
         rupees_val = paise_to_rupees(invoice.final_payable)
-        upi_url = f"upi://pay?pa={restaurant.upi_id}&pn={urllib.parse.quote(restaurant.name)}&am={rupees_val:.2f}&tr={invoice.invoice_number}&cu=INR"
+        clean_inv = invoice.invoice_number.replace('/', '_')
+        upi_url = f"upi://pay?pa={restaurant.upi_id}&pn={urllib.parse.quote(restaurant.name)}&am={rupees_val:.2f}&tr={clean_inv}&cu=INR"
         qr = qrcode.QRCode(box_size=3, border=1)
         qr.add_data(upi_url)
         qr.make(fit=True)
@@ -207,7 +252,7 @@ def generate_thermal_receipt_html(invoice, orders, restaurant) -> str:
         upi_qr_html = f"""
         <div style="text-align:center; margin-top:8px;">
             <img src="data:image/png;base64,{b64_qr}" style="width:90px;height:90px;" alt="UPI QR" /><br/>
-            <span style="font-size:10px;">Scan to Pay: {restaurant.upi_id}</span>
+            <span style="font-size:10px;">Scan to Pay: {escape(restaurant.upi_id)}</span>
         </div>
         """
 
@@ -218,8 +263,8 @@ def generate_thermal_receipt_html(invoice, orders, restaurant) -> str:
     <meta charset="utf-8">
     <title>Bill - {invoice.invoice_number}</title>
     <style>
-      @page {{ size: 80mm auto; margin: 0; }}
-      body {{ font-family: 'Courier New', monospace; width: 72mm; margin: 0 auto; padding: 6px 0; font-size: 12px; line-height: 1.25; color: #000; }}
+      @page {{ size: 80mm auto; margin: 2mm 3mm; }}
+      body {{ font-family: 'Courier New', monospace, sans-serif; width: 72mm; margin: 0 auto; padding: 6px 0; font-size: 12px; line-height: 1.25; color: #000; }}
       .center {{ text-align: center; }}
       .bold {{ font-weight: bold; }}
       .header {{ border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 6px; }}
@@ -270,7 +315,7 @@ def generate_thermal_receipt_html(invoice, orders, restaurant) -> str:
         {f"<div style='display:flex; justify-content:space-between;'><span>Discount:</span><span>- {format_inr(invoice.discount_amount)}</span></div>" if invoice.discount_amount > 0 else ""}
         <div style="display:flex; justify-content:space-between;"><span>CGST ({invoice.cgst_rate}%):</span><span>{format_inr(invoice.cgst_amount)}</span></div>
         <div style="display:flex; justify-content:space-between;"><span>SGST ({invoice.sgst_rate}%):</span><span>{format_inr(invoice.sgst_amount)}</span></div>
-        {f"<div style='display:flex; justify-content:space-between;'><span>Service Chg:</span><span>{format_inr(invoice.service_charge_amount)}</span></div>" if invoice.service_charge_amount > 0 else ""}
+        {f"<div style='display:flex; justify-content:space-between;'><span>Service Chg:</span><span>{format_inr(invoice.service_charge_amount)}</span></div>" if getattr(invoice, 'service_charge_amount', 0) > 0 else ""}
         {f"<div style='display:flex; justify-content:space-between;'><span>Round Off:</span><span>{format_inr(invoice.round_off)}</span></div>" if invoice.round_off != 0 else ""}
         <div class="grand-total" style="display:flex; justify-content:space-between;">
           <span>TOTAL PAYABLE:</span>

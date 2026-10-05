@@ -172,11 +172,12 @@ export const OrderCard: React.FC<OrderCardProps> = ({
                 <span>Paid & Closed</span>
               </span>
               <button
-                onClick={() => onReprintBill(order)}
-                className="text-[#641C24] bg-amber-50 hover:bg-amber-100 border border-[#C49A52]/40 px-2.5 py-1 rounded font-bold cursor-pointer flex items-center gap-1"
+                onClick={() => onOpenBillModal(order)}
+                className="text-[#641C24] bg-amber-50 hover:bg-amber-100 border border-[#C49A52]/50 px-2.5 py-1.5 rounded-lg font-bold cursor-pointer flex items-center gap-1.5 shadow-2xs text-xs"
+                title="Open reprint & bill download options"
               >
                 <Printer className="w-3.5 h-3.5 text-[#641C24]" />
-                <span>Reprint</span>
+                <span>Reprint / Bill Options</span>
               </button>
             </div>
           )}

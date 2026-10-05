@@ -674,3 +674,136 @@ def cancel_order(order_id):
         return jsonify({"message": "Order cancelled successfully."})
     finally:
         db.close()
+
+
+@orders_bp.route('/<int:order_id>/receipt/html', methods=['GET'])
+def print_order_thermal_receipt_html(order_id):
+    """Print-ready 80mm thermal receipt HTML for an order or its dining session."""
+    from flask import Response
+    from app.models import Invoice
+    from app.services.invoice_service import generate_thermal_receipt_html
+    from app.blueprints.billing import _get_invoice_orders
+
+    db = SessionLocal()
+    try:
+        order = db.get(Order, order_id)
+        if not order:
+            return jsonify({"error": {"code": "NOT_FOUND", "message": "Order not found."}}), 404
+
+        rest = db.query(Restaurant).first()
+
+        # If order's session is already invoiced, use that invoice
+        if order.session and order.session.invoice_id:
+            inv = db.get(Invoice, order.session.invoice_id)
+            if inv:
+                orders = _get_invoice_orders(inv, db)
+                html = generate_thermal_receipt_html(inv, orders, rest)
+                return Response(html, mimetype='text/html; charset=utf-8')
+
+        # Otherwise generate a provisional receipt for this order
+        cgst_rate = rest.cgst_rate if rest else 2.5
+        sgst_rate = rest.sgst_rate if rest else 2.5
+        sc_rate = rest.service_charge_rate if (rest and rest.service_charge_enabled) else 0.0
+        gst = calculate_gst_breakdown(order.subtotal, 0, cgst_rate, sgst_rate, sc_rate)
+
+        class ProvisionalInvoice:
+            invoice_number = f"BILL-{order.order_number}"
+            created_at = order.created_at
+            table = order.table
+            customer_name = order.customer_name
+            customer_gstin = None
+            payment_method = "PENDING"
+            payment_status = order.status
+            hsn_sac = "9963"
+            subtotal = gst["subtotal_paise"]
+            discount_amount = 0
+            cgst_rate = cgst_rate
+            cgst_amount = gst["cgst_paise"]
+            sgst_rate = sgst_rate
+            sgst_amount = gst["sgst_paise"]
+            service_charge_amount = gst["service_charge_paise"]
+            round_off = gst["round_off_paise"]
+            final_payable = gst["final_payable_paise"]
+
+        html = generate_thermal_receipt_html(ProvisionalInvoice(), [order], rest)
+        return Response(html, mimetype='text/html; charset=utf-8')
+    finally:
+        db.close()
+
+
+@orders_bp.route('/<int:order_id>/pdf', methods=['GET'])
+def download_order_pdf(order_id):
+    """Download PDF for an order (A4 or thermal)."""
+    from flask import Response
+    from app.models import Invoice
+    from app.services.invoice_service import generate_invoice_pdf
+    from app.blueprints.billing import _get_invoice_orders
+
+    fmt = request.args.get('format', 'A4')
+    as_attachment = request.args.get('download', '0') == '1'
+    db = SessionLocal()
+    try:
+        order = db.get(Order, order_id)
+        if not order:
+            return jsonify({"error": {"code": "NOT_FOUND", "message": "Order not found."}}), 404
+
+        rest = db.query(Restaurant).first()
+
+        # If order's session is already invoiced, use that invoice
+        if order.session and order.session.invoice_id:
+            inv = db.get(Invoice, order.session.invoice_id)
+            if inv:
+                orders = _get_invoice_orders(inv, db)
+                pdf_bytes = generate_invoice_pdf(inv, orders, rest, format_type=fmt)
+                safe_filename = inv.invoice_number.replace('/', '_') + f"_{fmt}.pdf"
+                disp_type = 'attachment' if as_attachment else 'inline'
+                return Response(
+                    pdf_bytes,
+                    mimetype='application/pdf',
+                    headers={
+                        'Content-Type': 'application/pdf',
+                        'Content-Disposition': f'{disp_type}; filename="{safe_filename}"',
+                        'Content-Length': str(len(pdf_bytes))
+                    }
+                )
+
+        # Provisional bill PDF
+        cgst_rate = rest.cgst_rate if rest else 2.5
+        sgst_rate = rest.sgst_rate if rest else 2.5
+        sc_rate = rest.service_charge_rate if (rest and rest.service_charge_enabled) else 0.0
+        gst = calculate_gst_breakdown(order.subtotal, 0, cgst_rate, sgst_rate, sc_rate)
+
+        class ProvisionalInvoice:
+            invoice_number = f"BILL-{order.order_number}"
+            created_at = order.created_at
+            table = order.table
+            customer_name = order.customer_name
+            customer_gstin = None
+            payment_method = "PENDING"
+            payment_status = order.status
+            hsn_sac = "9963"
+            subtotal = gst["subtotal_paise"]
+            discount_amount = 0
+            cgst_rate = cgst_rate
+            cgst_amount = gst["cgst_paise"]
+            sgst_rate = sgst_rate
+            sgst_amount = gst["sgst_paise"]
+            service_charge_amount = gst["service_charge_paise"]
+            round_off = gst["round_off_paise"]
+            final_payable = gst["final_payable_paise"]
+
+        pdf_bytes = generate_invoice_pdf(ProvisionalInvoice(), [order], rest, format_type=fmt)
+        safe_filename = f"BILL_{order.order_number}_{fmt}.pdf"
+        disp_type = 'attachment' if as_attachment else 'inline'
+        return Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': f'{disp_type}; filename="{safe_filename}"',
+                'Content-Length': str(len(pdf_bytes))
+            }
+        )
+    finally:
+        db.close()
+
