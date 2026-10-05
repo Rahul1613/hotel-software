@@ -97,7 +97,7 @@ def override_table_status(table_id):
 
     db = SessionLocal()
     try:
-        table = db.query(RestaurantTable).get(table_id)
+        table = db.get(RestaurantTable, table_id)
         if not table:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Table not found."}}), 404
 
@@ -122,7 +122,7 @@ def regenerate_qr_token(table_id):
     """Owner action to revoke compromised QR code and generate fresh one."""
     db = SessionLocal()
     try:
-        table = db.query(RestaurantTable).get(table_id)
+        table = db.get(RestaurantTable, table_id)
         if not table:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Table not found."}}), 404
 

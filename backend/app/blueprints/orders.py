@@ -101,7 +101,7 @@ def get_active_dining_session():
             payload = decode_order_token(order_token)
             if payload:
                 ord_id = payload.get('order_id')
-                o = db.query(Order).get(ord_id)
+                o = db.get(Order, ord_id)
                 if o and o.session:
                     session = o.session
         # 2. Table session token
@@ -109,7 +109,7 @@ def get_active_dining_session():
             payload = decode_table_session_token(token)
             if payload:
                 sess_id = payload.get('session_id')
-                session = db.query(TableSession).get(sess_id)
+                session = db.get(TableSession, sess_id)
         # 3. Table number fallback
         if not session and table_num:
             formatted = str(table_num).zfill(2)
@@ -187,30 +187,26 @@ def get_single_order(order_id):
     staff_user = get_current_user()
     token = request.args.get('token')
 
-    authorized = False
-    if staff_user:
-        authorized = True
-    elif token:
-        payload = decode_order_token(token)
-        if payload and payload.get('order_id') == order_id:
-            authorized = True
-        else:
-            session_payload = decode_table_session_token(token)
-            if session_payload:
-                db_auth = SessionLocal()
-                try:
-                    o_auth = db_auth.query(Order).get(order_id)
-                    if o_auth and o_auth.session_id == session_payload.get('session_id'):
-                        authorized = True
-                finally:
-                    db_auth.close()
-
-    if not authorized:
-        return jsonify({"error": {"code": "FORBIDDEN", "message": "Access token required to view order."}}), 403
-
     db = SessionLocal()
     try:
-        o = db.query(Order).get(order_id)
+        authorized = False
+        if staff_user:
+            authorized = True
+        elif token:
+            payload = decode_order_token(token)
+            if payload and payload.get('order_id') == order_id:
+                authorized = True
+            else:
+                session_payload = decode_table_session_token(token)
+                if session_payload:
+                    o_auth = db.get(Order, order_id)
+                    if o_auth and o_auth.session_id == session_payload.get('session_id'):
+                        authorized = True
+
+        if not authorized:
+            return jsonify({"error": {"code": "FORBIDDEN", "message": "Access token required to view order."}}), 403
+
+        o = db.get(Order, order_id)
         if not o:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Order not found."}}), 404
 
@@ -321,7 +317,7 @@ def place_order():
                     payload = decode_table_session_token(table_token)
                     if not payload:
                         return jsonify({"error": {"code": "EXPIRED_SESSION", "message": "Table session token expired or invalid."}}), 401
-                    session = db.query(TableSession).get(payload.get('session_id'))
+                    session = db.get(TableSession, payload.get('session_id'))
                     if not session or session.status in ["BILLED", "CLOSED"]:
                         return jsonify({"error": {"code": "SESSION_CLOSED", "message": "Table session is closed."}}), 400
                     table = session.table
@@ -469,7 +465,7 @@ def update_order_status(order_id):
 
     db = SessionLocal()
     try:
-        order = db.query(Order).get(order_id)
+        order = db.get(Order, order_id)
         if not order:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Order not found."}}), 404
 
@@ -631,7 +627,7 @@ def cancel_order(order_id):
 
     db = SessionLocal()
     try:
-        order = db.query(Order).get(order_id)
+        order = db.get(Order, order_id)
         if not order:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Order not found."}}), 404
 

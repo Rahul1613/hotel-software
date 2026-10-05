@@ -69,7 +69,7 @@ def change_password():
 
     db = SessionLocal()
     try:
-        user = db.query(User).get(g.current_user.id)
+        user = db.get(User, g.current_user.id)
         if not verify_password(user.password_hash, old_password):
             return jsonify({"error": {"code": "INCORRECT_PASSWORD", "message": "Current password incorrect."}}), 400
 

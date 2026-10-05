@@ -56,7 +56,7 @@ def get_session_bill_summary(session_id):
     """
     db = SessionLocal()
     try:
-        session = db.query(TableSession).get(session_id)
+        session = db.get(TableSession, session_id)
         if not session:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Session not found."}}), 404
 
@@ -123,9 +123,9 @@ def generate_invoice():
     try:
         session = None
         if session_id:
-            session = db.query(TableSession).get(session_id)
+            session = db.get(TableSession, session_id)
         elif order_id:
-            order = db.query(Order).get(order_id)
+            order = db.get(Order, order_id)
             if order:
                 session = order.session
 
@@ -134,7 +134,7 @@ def generate_invoice():
 
         # If already billed, return existing invoice
         if session.invoice_id:
-            existing = db.query(Invoice).get(session.invoice_id)
+            existing = db.get(Invoice, session.invoice_id)
             if existing:
                 return jsonify({
                     "message": "Session already invoiced.",
@@ -261,7 +261,7 @@ def cancel_invoice_and_issue_credit_note(invoice_id):
 
     db = SessionLocal()
     try:
-        inv = db.query(Invoice).get(invoice_id)
+        inv = db.get(Invoice, invoice_id)
         if not inv:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Invoice not found."}}), 404
 
@@ -286,7 +286,7 @@ def cancel_invoice_and_issue_credit_note(invoice_id):
 
         # Reopen or update session
         if inv.session_id:
-            sess = db.query(TableSession).get(inv.session_id)
+            sess = db.get(TableSession, inv.session_id)
             if sess:
                 sess.status = "OPEN"
                 sess.invoice_id = None
@@ -315,7 +315,7 @@ def download_invoice_pdf_view(invoice_id):
     fmt = request.args.get('format', 'A4')
     db = SessionLocal()
     try:
-        inv = db.query(Invoice).get(invoice_id)
+        inv = db.get(Invoice, invoice_id)
         if not inv:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Invoice not found."}}), 404
 
@@ -336,7 +336,7 @@ def print_thermal_receipt_html_view(invoice_id):
     """Print-ready 80mm thermal receipt HTML with UPI QR code."""
     db = SessionLocal()
     try:
-        inv = db.query(Invoice).get(invoice_id)
+        inv = db.get(Invoice, invoice_id)
         if not inv:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Invoice not found."}}), 404
 
@@ -353,7 +353,7 @@ def print_kot_html_view(order_id):
     station = request.args.get('station', 'ALL')
     db = SessionLocal()
     try:
-        order = db.query(Order).get(order_id)
+        order = db.get(Order, order_id)
         if not order:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Order not found."}}), 404
 
@@ -371,11 +371,11 @@ def print_kot_html_view(order_id):
 def _get_invoice_orders(inv, db):
     """Return all non-cancelled orders for an invoice, resolving via session."""
     if inv.session_id:
-        session = db.query(TableSession).get(inv.session_id)
+        session = db.get(TableSession, inv.session_id)
         if session:
             return [o for o in session.orders if o.status != "CANCELLED"]
     if inv.table_id:
-        table = db.query(RestaurantTable).get(inv.table_id)
+        table = db.get(RestaurantTable, inv.table_id)
         if table:
             return [o for o in table.orders if o.status != "CANCELLED"]
     return []
@@ -387,7 +387,7 @@ def get_internal_bill_data(invoice_id):
     """Returns internal financial breakdown for an invoice. Owner/Manager only."""
     db = SessionLocal()
     try:
-        inv = db.query(Invoice).get(invoice_id)
+        inv = db.get(Invoice, invoice_id)
         if not inv:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Invoice not found."}}), 404
 
@@ -488,7 +488,7 @@ def add_internal_adjustment(invoice_id):
 
     db = SessionLocal()
     try:
-        inv = db.query(Invoice).get(invoice_id)
+        inv = db.get(Invoice, invoice_id)
         if not inv:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Invoice not found."}}), 404
 
@@ -534,7 +534,7 @@ def print_internal_receipt_html(invoice_id):
     """Internal management thermal receipt HTML (owner/manager only)."""
     db = SessionLocal()
     try:
-        inv = db.query(Invoice).get(invoice_id)
+        inv = db.get(Invoice, invoice_id)
         if not inv:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Invoice not found."}}), 404
 
@@ -563,7 +563,7 @@ def print_both_receipts_html(invoice_id):
     """Both customer + internal receipts in one print-ready HTML page (owner/manager only)."""
     db = SessionLocal()
     try:
-        inv = db.query(Invoice).get(invoice_id)
+        inv = db.get(Invoice, invoice_id)
         if not inv:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Invoice not found."}}), 404
 

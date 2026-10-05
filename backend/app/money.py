@@ -87,3 +87,11 @@ def get_financial_year(dt: datetime = None) -> str:
         start_yr = (year - 1) % 100
         end_yr = year % 100
     return f"{start_yr:02d}-{end_yr:02d}"
+
+def ist_to_utc_range(day_date) -> tuple[datetime, datetime]:
+    """Convert an IST calendar date into UTC datetime start & end for database filtering."""
+    ist_start = IST.localize(datetime.combine(day_date, datetime.min.time()))
+    ist_end = IST.localize(datetime.combine(day_date, datetime.max.time()))
+    utc_start = ist_start.astimezone(pytz.utc).replace(tzinfo=None)
+    utc_end = ist_end.astimezone(pytz.utc).replace(tzinfo=None)
+    return utc_start, utc_end

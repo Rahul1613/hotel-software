@@ -88,7 +88,7 @@ def moderate_review(review_id):
     data = request.json or {}
     db = SessionLocal()
     try:
-        r = db.query(Review).get(review_id)
+        r = db.get(Review, review_id)
         if not r:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Review not found."}}), 404
 

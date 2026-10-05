@@ -66,7 +66,7 @@ def update_category(cat_id):
     data = request.json or {}
     db = SessionLocal()
     try:
-        cat = db.query(MenuCategory).get(cat_id)
+        cat = db.get(MenuCategory, cat_id)
         if not cat:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Category not found."}}), 404
 
@@ -89,7 +89,7 @@ def delete_category(cat_id):
     """Soft delete category."""
     db = SessionLocal()
     try:
-        cat = db.query(MenuCategory).get(cat_id)
+        cat = db.get(MenuCategory, cat_id)
         if not cat:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Category not found."}}), 404
         cat.is_active = False
@@ -218,7 +218,7 @@ def update_menu_item(item_id):
     data = request.json or {}
     db = SessionLocal()
     try:
-        item = db.query(MenuItem).get(item_id)
+        item = db.get(MenuItem, item_id)
         if not item:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Item not found."}}), 404
 
@@ -270,7 +270,7 @@ def delete_menu_item(item_id):
     """Soft delete menu item."""
     db = SessionLocal()
     try:
-        item = db.query(MenuItem).get(item_id)
+        item = db.get(MenuItem, item_id)
         if not item:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Item not found."}}), 404
         item.is_active = False

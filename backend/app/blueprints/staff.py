@@ -88,7 +88,7 @@ def update_staff(user_id):
     data = request.json or {}
     db = SessionLocal()
     try:
-        user = db.query(User).get(user_id)
+        user = db.get(User, user_id)
         if not user:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Staff not found."}}), 404
 
@@ -108,7 +108,7 @@ def reset_staff_password(user_id):
     """Owner resets staff password and generates random one-time password."""
     db = SessionLocal()
     try:
-        user = db.query(User).get(user_id)
+        user = db.get(User, user_id)
         if not user:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Staff not found."}}), 404
 

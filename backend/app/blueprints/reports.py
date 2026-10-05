@@ -6,7 +6,7 @@ from app.models import (
     Reservation, Restaurant, AuditLog
 )
 from app.auth import require_role
-from app.money import paise_to_rupees, now_ist
+from app.money import paise_to_rupees, now_ist, ist_to_utc_range
 from app.services.invoice_service import generate_sales_excel
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
@@ -20,11 +20,12 @@ def get_reports_summary():
     db = SessionLocal()
     try:
         ist_now = now_ist()
-        today_start = datetime.combine(ist_now.date(), datetime.min.time())
+        today_utc_start, today_utc_end = ist_to_utc_range(ist_now.date())
 
         # Today's paid invoices
         today_invoices = db.query(Invoice).filter(
-            Invoice.created_at >= today_start,
+            Invoice.created_at >= today_utc_start,
+            Invoice.created_at <= today_utc_end,
             Invoice.payment_status == 'PAID'
         ).all()
 
@@ -45,7 +46,8 @@ def get_reports_summary():
             func.sum(OrderItem.quantity).label('total_qty'),
             func.sum(OrderItem.total_price).label('total_rev_paise')
         ).join(Order).filter(
-            Order.created_at >= today_start,
+            Order.created_at >= today_utc_start,
+            Order.created_at <= today_utc_end,
             Order.status != 'CANCELLED'
         ).group_by(OrderItem.item_name).order_by(desc('total_qty')).limit(5).all()
 
@@ -59,12 +61,11 @@ def get_reports_summary():
         weekly_sales = []
         for i in range(6, -1, -1):
             day_date = ist_now.date() - timedelta(days=i)
-            day_start = datetime.combine(day_date, datetime.min.time())
-            day_end = datetime.combine(day_date, datetime.max.time())
+            day_utc_start, day_utc_end = ist_to_utc_range(day_date)
 
             day_invoices = db.query(Invoice).filter(
-                Invoice.created_at >= day_start,
-                Invoice.created_at <= day_end,
+                Invoice.created_at >= day_utc_start,
+                Invoice.created_at <= day_utc_end,
                 Invoice.payment_status == 'PAID'
             ).all()
 

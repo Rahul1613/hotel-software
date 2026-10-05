@@ -66,7 +66,7 @@ def record_stock_movement(item_id):
 
     db = SessionLocal()
     try:
-        item = db.query(InventoryItem).get(item_id)
+        item = db.get(InventoryItem, item_id)
         if not item:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Item not found."}}), 404
 

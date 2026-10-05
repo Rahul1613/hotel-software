@@ -71,7 +71,7 @@ def resolve_service_request(req_id):
     st = data.get('status', 'RESOLVED')
     db = SessionLocal()
     try:
-        r = db.query(ServiceRequest).get(req_id)
+        r = db.get(ServiceRequest, req_id)
         if not r:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Request not found."}}), 404
         r.status = st

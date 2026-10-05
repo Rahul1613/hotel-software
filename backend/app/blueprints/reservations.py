@@ -135,7 +135,7 @@ def update_reservation_status(res_id):
 
     db = SessionLocal()
     try:
-        res = db.query(Reservation).get(res_id)
+        res = db.get(Reservation, res_id)
         if not res:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Reservation not found."}}), 404
 
@@ -189,7 +189,7 @@ def cancel_reservation(res_id):
 
     db = SessionLocal()
     try:
-        res = db.query(Reservation).get(res_id)
+        res = db.get(Reservation, res_id)
         if not res:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Reservation not found."}}), 404
 
