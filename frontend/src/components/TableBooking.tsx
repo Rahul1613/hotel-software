@@ -40,12 +40,26 @@ export const TableBooking: React.FC<ReservationProps> = ({ restaurant, onBack })
     setErrorMsg('');
 
     try {
+      // Format ISO datetime string for reserved_for
+      let isoDateTime = `${bookingDate}T19:30:00`;
+      try {
+        const [timePart, meridiem] = preferredTime.split(' ');
+        let [hours, minutes] = timePart.split(':').map(Number);
+        if (meridiem === 'PM' && hours < 12) hours += 12;
+        if (meridiem === 'AM' && hours === 12) hours = 0;
+        const pad = (n: number) => String(n).padStart(2, '0');
+        isoDateTime = `${bookingDate}T${pad(hours)}:${pad(minutes)}:00`;
+      } catch (e) {
+        // Fallback to evening time
+      }
+
       const res = await fetch('/api/reservations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer_name: customerName,
           mobile_number: mobileNumber,
+          reserved_for: isoDateTime,
           booking_date: bookingDate,
           preferred_time: preferredTime,
           guests_count: guestsCount,
@@ -55,7 +69,7 @@ export const TableBooking: React.FC<ReservationProps> = ({ restaurant, onBack })
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit reservation');
+      if (!res.ok) throw new Error(data.error?.message || data.error || 'Failed to submit reservation');
       setConfirmedBookingRef(data.booking_reference);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error booking table. Please call restaurant directly.');

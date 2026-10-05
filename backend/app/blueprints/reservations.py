@@ -61,6 +61,19 @@ def create_reservation():
     name = str(data.get('customer_name', '')).strip()
     mobile = str(data.get('mobile_number', '')).strip()
     res_time_str = data.get('reserved_for')
+    if not res_time_str and data.get('booking_date'):
+        b_date = str(data.get('booking_date')).strip()
+        b_time = str(data.get('preferred_time') or data.get('reservation_time', '19:30')).strip()
+        try:
+            if "AM" in b_time.upper() or "PM" in b_time.upper():
+                t_obj = datetime.strptime(b_time, "%I:%M %p").time()
+            else:
+                t_obj = datetime.strptime(b_time, "%H:%M").time()
+            d_obj = datetime.strptime(b_date, "%Y-%m-%d").date()
+            res_time_str = datetime.combine(d_obj, t_obj).isoformat()
+        except Exception:
+            pass
+
     guests = int(data.get('guests_count', 2))
     seating = data.get('seating_preference', 'AC')
 

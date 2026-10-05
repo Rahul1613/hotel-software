@@ -156,8 +156,13 @@ def get_table_qr_png(table_number):
 def shift_session():
     """Shift an entire dining session from one table to another."""
     data = request.json or {}
-    from_table_num = str(data.get('from_table')).zfill(2)
-    to_table_num = str(data.get('to_table')).zfill(2)
+    from_tbl_raw = data.get('from_table')
+    to_tbl_raw = data.get('to_table')
+    if not from_tbl_raw or not to_tbl_raw:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Source and destination table numbers required."}}), 400
+
+    from_table_num = str(from_tbl_raw).zfill(2)
+    to_table_num = str(to_tbl_raw).zfill(2)
 
     db = SessionLocal()
     try:
@@ -200,8 +205,13 @@ def shift_session():
 def merge_sessions():
     """Merge secondary table session orders into primary table session."""
     data = request.json or {}
-    primary_num = str(data.get('primary_table')).zfill(2)
-    secondary_num = str(data.get('secondary_table')).zfill(2)
+    prim_raw = data.get('primary_table')
+    sec_raw = data.get('secondary_table')
+    if not prim_raw or not sec_raw:
+        return jsonify({"error": {"code": "BAD_REQUEST", "message": "Primary and secondary table numbers required."}}), 400
+
+    primary_num = str(prim_raw).zfill(2)
+    secondary_num = str(sec_raw).zfill(2)
 
     db = SessionLocal()
     try:

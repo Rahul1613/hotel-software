@@ -165,6 +165,7 @@ def get_active_dining_session():
             "latest_order_status": latest_order.status,
             "running_subtotal": paise_to_rupees(total_subtotal_paise),
             "running_final_amount": paise_to_rupees(total_final_paise),
+            "total_final_amount": paise_to_rupees(total_final_paise),
             "items": items_summary,
             "orders": [{
                 "id": o.id,
