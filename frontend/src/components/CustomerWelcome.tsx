@@ -29,6 +29,14 @@ export const CustomerWelcome: React.FC<WelcomeProps> = ({
   const whatsappNumber = (restaurant?.whatsapp || '919823456789').replace(/[^0-9]/g, '');
   const activeOrderId = localStorage.getItem('ekdant_active_order_id');
 
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const forceHome = params.get('home') === 'true';
+    if (activeOrderId && !forceHome) {
+      navigate(`/track/${activeOrderId}`, { replace: true });
+    }
+  }, [activeOrderId]);
+
   return (
     <div className="min-h-screen bg-[#FFF9F0] text-[#282321] flex flex-col justify-between selection:bg-[#C49A52] selection:text-white">
       {/* Auspicious Header with Language Switcher */}

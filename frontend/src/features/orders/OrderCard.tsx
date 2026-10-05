@@ -147,13 +147,21 @@ export const OrderCard: React.FC<OrderCardProps> = ({
             </button>
           )}
 
-          {order.status === 'SERVED' && (
+          {order.status === 'SERVED' ? (
             <button
               onClick={() => onOpenBillModal(order)}
-              className="col-span-2 bg-[#641C24] hover:bg-[#852D34] text-white font-bold py-2 rounded-lg cursor-pointer flex items-center justify-center gap-1"
+              className="col-span-2 bg-[#641C24] hover:bg-[#852D34] text-white font-bold py-2 rounded-lg cursor-pointer flex items-center justify-center gap-1 shadow-xs"
             >
               <FileText className="w-4 h-4 text-[#C49A52]" />
-              <span>Generate GST Bill</span>
+              <span>Generate GST Bill & Settle</span>
+            </button>
+          ) : order.status !== 'COMPLETED' && (
+            <button
+              onClick={() => onOpenBillModal(order)}
+              className="col-span-2 bg-amber-50 hover:bg-amber-100 text-[#641C24] border border-[#C49A52]/60 font-bold py-1.5 rounded-lg cursor-pointer flex items-center justify-center gap-1 text-[11px] mt-1"
+            >
+              <FileText className="w-3.5 h-3.5 text-[#C49A52]" />
+              <span>Quick Bill / Settle Table</span>
             </button>
           )}
 

@@ -161,7 +161,14 @@ function AppContent() {
               onAddToCart={(item, addons, custom) => handleUpdateCartQty(item, 1)}
               onUpdateCartQty={handleUpdateCartQty}
               onOpenCart={() => setIsCartOpen(true)}
-              onBackToHome={() => navigate('/')}
+              onBackToHome={() => {
+                const activeId = localStorage.getItem('ekdant_active_order_id');
+                if (activeId) {
+                  navigate(`/track/${activeId}`);
+                } else {
+                  navigate('/');
+                }
+              }}
               onRequestService={() => {}}
               onSelectTable={t => setTableNumber(t)}
             />

@@ -30,7 +30,7 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language, onToggle
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [screenKeptOn, setScreenKeptOn] = useState(false);
 
-  // 1. Screen Wake Lock: Keep phone screen ON while waiting for food
+  // 1. Screen Wake Lock & Accidental Back-Button Protection: Keep phone screen ON while dining
   useEffect(() => {
     let wakeLockSentinel: any = null;
     const requestWakeLock = async () => {
@@ -45,7 +45,23 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({ language, onToggle
     };
     requestWakeLock();
 
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        await requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Prevent accidental back exit from tracking screen
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, '', window.location.href);
+    };
+    window.addEventListener('popstate', handlePopState);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('popstate', handlePopState);
       if (wakeLockSentinel) {
         wakeLockSentinel.release().catch(() => {});
       }

@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import type { RestaurantTable } from '../../types';
 import { apiRequest } from '../../api';
-import { Eye, ArrowRightLeft, Merge } from 'lucide-react';
+import { Eye, ArrowRightLeft, Merge, FileText } from 'lucide-react';
 import { Modal } from '../../components/common/Modal';
 
 interface TableGridProps {
   tables: RestaurantTable[];
   onRefresh: () => void;
+  onBillTable?: (tbl: RestaurantTable) => void;
 }
 
-export const TableGrid: React.FC<TableGridProps> = ({ tables, onRefresh }) => {
+export const TableGrid: React.FC<TableGridProps> = ({ tables, onRefresh, onBillTable }) => {
   const [shiftSource, setShiftSource] = useState<RestaurantTable | null>(null);
   const [shiftDest, setShiftDest] = useState<string>('02');
   const [mergeSource, setMergeSource] = useState<string>('02');
@@ -118,27 +119,38 @@ export const TableGrid: React.FC<TableGridProps> = ({ tables, onRefresh }) => {
                 </div>
 
                 {tbl.status !== 'AVAILABLE' && (
-                  <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-black/5">
-                    <button
-                      onClick={() => {
-                        setShiftSource(tbl);
-                        setErrorMsg('');
-                      }}
-                      className="bg-white/90 hover:bg-white text-gray-800 border border-gray-300 py-1 rounded font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <ArrowRightLeft className="w-3 h-3" />
-                      <span>Shift</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setMergeDest(tbl);
-                        setErrorMsg('');
-                      }}
-                      className="bg-white/90 hover:bg-white text-gray-800 border border-gray-300 py-1 rounded font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <Merge className="w-3 h-3" />
-                      <span>Merge</span>
-                    </button>
+                  <div className="space-y-1.5 pt-1 border-t border-black/5">
+                    {onBillTable && (
+                      <button
+                        onClick={() => onBillTable(tbl)}
+                        className="w-full bg-[#641C24] hover:bg-[#852D34] text-white py-1.5 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-[#C49A52]" />
+                        <span>Generate Bill (बिल बनवा)</span>
+                      </button>
+                    )}
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        onClick={() => {
+                          setShiftSource(tbl);
+                          setErrorMsg('');
+                        }}
+                        className="bg-white/90 hover:bg-white text-gray-800 border border-gray-300 py-1 rounded font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <ArrowRightLeft className="w-3 h-3" />
+                        <span>Shift</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setMergeDest(tbl);
+                          setErrorMsg('');
+                        }}
+                        className="bg-white/90 hover:bg-white text-gray-800 border border-gray-300 py-1 rounded font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Merge className="w-3 h-3" />
+                        <span>Merge</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

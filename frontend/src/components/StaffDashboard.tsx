@@ -245,7 +245,20 @@ export const StaffDashboard: React.FC = () => {
         )}
 
         {activeTab === 'tables' && (
-          <TableGrid tables={tables} onRefresh={fetchDashboardData} />
+          <TableGrid 
+            tables={tables} 
+            onRefresh={fetchDashboardData} 
+            onBillTable={tbl => {
+              const ord = orders.find(
+                o => o.table_number === tbl.table_number && o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
+              );
+              if (ord) {
+                setSelectedBillOrder(ord);
+              } else {
+                alert(`No active order found to bill for Table ${tbl.table_number}.`);
+              }
+            }}
+          />
         )}
 
         {activeTab === 'requests' && (
