@@ -24,7 +24,7 @@ def get_or_create_active_session(db, table: RestaurantTable, opened_by: str = "C
             opened_at=now_utc()
         )
         db.add(session)
-        db.flush()
+        db.commit()
 
     return session
 

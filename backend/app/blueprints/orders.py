@@ -319,6 +319,14 @@ def place_order():
                         return jsonify({"error": {"code": "EXPIRED_SESSION", "message": "Table session token expired or invalid."}}), 401
                     session = db.get(TableSession, payload.get('session_id'))
                     if not session or session.status in ["BILLED", "CLOSED"]:
+                        tbl_num = payload.get('table_number') or table_number
+                        if tbl_num:
+                            fmt = str(tbl_num).zfill(2)
+                            tbl = db.query(RestaurantTable).filter(RestaurantTable.table_number == fmt, RestaurantTable.is_active == True).first()
+                            if tbl:
+                                session = get_or_create_active_session(db, tbl, opened_by="CUSTOMER")
+                                table = tbl
+                    if not session or session.status in ["BILLED", "CLOSED"]:
                         return jsonify({"error": {"code": "SESSION_CLOSED", "message": "Table session is closed."}}), 400
                     table = session.table
 
