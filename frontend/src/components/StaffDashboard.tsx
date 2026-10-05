@@ -251,11 +251,13 @@ export const StaffDashboard: React.FC = () => {
             onBillTable={tbl => {
               const ord = orders.find(
                 o => o.table_number === tbl.table_number && o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
+              ) || orders.find(
+                o => o.table_number === tbl.table_number && o.status !== 'CANCELLED'
               );
               if (ord) {
                 setSelectedBillOrder(ord);
               } else {
-                alert(`No active order found to bill for Table ${tbl.table_number}.`);
+                alert(`No order found to bill for Table ${tbl.table_number}.`);
               }
             }}
           />

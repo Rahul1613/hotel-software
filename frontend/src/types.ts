@@ -95,10 +95,13 @@ export interface Order {
   special_instructions?: string;
   estimated_wait_minutes?: number;
   subtotal: number;
+  subtotal_paise?: number;
   cgst_amount: number;
   sgst_amount: number;
   final_amount: number;
   final_amount_paise?: number;
+  invoice_id?: number | null;
+  invoice_number?: string | null;
   created_at: string;
   items: OrderItem[];
 }

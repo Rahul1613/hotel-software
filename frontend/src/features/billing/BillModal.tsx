@@ -25,7 +25,21 @@ export const BillModal: React.FC<BillModalProps> = ({ order, isOpen, onClose, on
 
   const isCompleted = order.status === 'COMPLETED';
   const isManagement = currentUser?.role === 'owner' || currentUser?.role === 'manager';
-  const gst = calculateCartGst(order.subtotal, discountRupees, 2.5, 2.5, 0);
+
+  // Subtotal calculation with multiple fallbacks so it's NEVER 0 when items exist
+  const rawSubtotal =
+    (order.subtotal && order.subtotal > 0)
+      ? order.subtotal
+      : (order.subtotal_paise && order.subtotal_paise > 0)
+      ? order.subtotal_paise / 100
+      : (order.items && order.items.length > 0)
+      ? order.items.reduce((acc, it) => acc + (it.total_price || (it.price * it.quantity) || 0), 0)
+      : (order.final_amount && order.final_amount > 0)
+      ? order.final_amount / 1.05
+      : 0;
+
+  const gst = calculateCartGst(rawSubtotal, discountRupees, 2.5, 2.5, 0);
+  const displayFinalPayable = (isCompleted && order.final_amount > 0) ? order.final_amount : gst.finalPayable;
 
   const handlePrintOrDownload = async (
     target: 'CUSTOMER_THERMAL' | 'CUSTOMER_A4' | 'CUSTOMER_A4_DOWNLOAD' | 'INTERNAL_THERMAL' | 'BOTH'
@@ -119,9 +133,35 @@ export const BillModal: React.FC<BillModalProps> = ({ order, isOpen, onClose, on
         )}
 
         {isCompleted && (
-          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-2.5 rounded-xl flex items-center gap-2 text-xs font-semibold">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>This order is <strong>Paid & Settled</strong>. You can reprint or download bills below anytime.</span>
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-2.5 rounded-xl flex items-center justify-between text-xs font-semibold">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>This order is <strong>Paid & Settled</strong>.</span>
+            </div>
+            <span className="text-[11px] font-mono font-bold bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded">
+              {order.order_number}
+            </span>
+          </div>
+        )}
+
+        {/* Ordered Items List */}
+        {order.items && order.items.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-3 max-h-40 overflow-y-auto space-y-1.5 text-xs">
+            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+              Order Items ({order.items.length})
+            </div>
+            {order.items.map(it => (
+              <div key={it.id} className="flex justify-between items-center py-1 border-b border-gray-50 last:border-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-gray-800">{it.item_name}</span>
+                  <span className="text-gray-500 font-bold">× {it.quantity}</span>
+                  {it.customization && (
+                    <span className="text-[10px] text-amber-800 italic">({it.customization})</span>
+                  )}
+                </div>
+                <span className="font-bold text-gray-700">{formatINR(it.total_price || (it.price * it.quantity))}</span>
+              </div>
+            ))}
           </div>
         )}
 
@@ -129,7 +169,7 @@ export const BillModal: React.FC<BillModalProps> = ({ order, isOpen, onClose, on
         <div className="bg-[#FFF9F0] p-3.5 rounded-xl border border-[#C49A52]/30 space-y-1.5 text-xs">
           <div className="flex justify-between">
             <span className="text-gray-600">Order Subtotal:</span>
-            <span className="font-semibold">{formatINR(order.subtotal)}</span>
+            <span className="font-semibold">{formatINR(rawSubtotal)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">CGST (2.5%):</span>
@@ -147,7 +187,7 @@ export const BillModal: React.FC<BillModalProps> = ({ order, isOpen, onClose, on
           )}
           <div className="flex justify-between font-bold text-sm pt-2 border-t border-[#C49A52]/30 text-[#641C24]">
             <span>Total Payable:</span>
-            <span>{formatINR(isCompleted ? order.final_amount : gst.finalPayable)}</span>
+            <span>{formatINR(displayFinalPayable)}</span>
           </div>
         </div>
 

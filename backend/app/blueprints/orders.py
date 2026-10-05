@@ -45,6 +45,8 @@ def list_orders():
         orders = query.offset(offset).limit(limit).all()
         result = []
         for o in orders:
+            session_inv_id = o.session.invoice_id if o.session else None
+            session_inv_num = o.session.invoice.invoice_number if (o.session and o.session.invoice) else None
             result.append({
                 "id": o.id,
                 "order_number": o.order_number,
@@ -53,13 +55,18 @@ def list_orders():
                 "table_name": o.table.name if o.table else "Takeaway",
                 "section": o.table.section if o.table else "Takeaway",
                 "session_id": o.session_id,
+                "invoice_id": session_inv_id,
+                "invoice_number": session_inv_num,
                 "order_type": o.order_type,
                 "source": o.source,
                 "customer_name": o.customer_name,
                 "customer_phone": o.customer_phone,
                 "status": o.status,
                 "special_instructions": o.special_instructions,
+                "subtotal": paise_to_rupees(o.subtotal),
                 "subtotal_paise": o.subtotal,
+                "cgst_amount": paise_to_rupees(o.cgst_amount),
+                "sgst_amount": paise_to_rupees(o.sgst_amount),
                 "final_amount_paise": o.final_amount,
                 "final_amount": paise_to_rupees(o.final_amount),
                 "created_at": o.created_at.isoformat() if o.created_at else None,
